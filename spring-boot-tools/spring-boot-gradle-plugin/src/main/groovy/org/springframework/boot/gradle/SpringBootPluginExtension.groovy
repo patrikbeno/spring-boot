@@ -35,6 +35,7 @@ import org.springframework.boot.loader.tools.Layouts
  *
  * @author Phillip Webb
  * @author Dave Syer
+ * @author Patrik Beno
  */
 public class SpringBootPluginExtension {
 
@@ -47,6 +48,8 @@ public class SpringBootPluginExtension {
 		ZIP(new Layouts.Expanded()),
 
 		DIR(new Layouts.Expanded()),
+
+		MAVEN(new Layouts.Maven()),
 
 		NONE(new Layouts.None());
 
@@ -63,6 +66,8 @@ public class SpringBootPluginExtension {
 	 * searched for a suitable class.
 	 */
 	String mainClass
+
+	String launcherClass;
 
 	/**
 	 * The name of the ivy configuration name to treat as 'provided' (when packaging

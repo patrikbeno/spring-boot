@@ -16,23 +16,32 @@
 
 package org.springframework.boot.gradle.repackage;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
-
 import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.Project;
+import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.bundling.Jar;
 import org.springframework.boot.gradle.SpringBootPluginExtension;
+import org.springframework.boot.loader.MvnArtifact;
 import org.springframework.boot.loader.tools.Repackager;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Repackage task.
  *
  * @author Phillip Webb
  * @author Janne Valkealahti
+ * @author Patrik Beno
  */
 public class RepackageTask extends DefaultTask {
 
@@ -44,6 +53,8 @@ public class RepackageTask extends DefaultTask {
 
 	private String mainClass;
 
+	private String launcherClass;
+
 	public void setCustomConfiguration(String customConfiguration) {
 		this.customConfiguration = customConfiguration;
 	}
@@ -54,6 +65,10 @@ public class RepackageTask extends DefaultTask {
 
 	public void setMainClass(String mainClass) {
 		this.mainClass = mainClass;
+	}
+
+	public void setLauncherClass(String launcherClass) {
+		this.launcherClass = launcherClass;
 	}
 
 	@TaskAction
@@ -99,12 +114,13 @@ public class RepackageTask extends DefaultTask {
 				if (file.exists()) {
 					Repackager repackager = new LoggingRepackager(file);
 					setMainClass(repackager);
+					repackager.setLauncherClass(this.extension.getLauncherClass());
 					if (this.extension.convertLayout() != null) {
 						repackager.setLayout(this.extension.convertLayout());
 					}
 					repackager.setBackupSource(this.extension.isBackupSource());
 					try {
-						repackager.repackage(this.libraries);
+						repackager.repackage(this.libraries, getResolvedDependencies());
 					}
 					catch (IOException ex) {
 						throw new IllegalStateException(ex.getMessage(), ex);
@@ -121,6 +137,28 @@ public class RepackageTask extends DefaultTask {
 			if (RepackageTask.this.mainClass != null) {
 				repackager.setMainClass(RepackageTask.this.mainClass);
 			}
+		}
+
+		/**
+		 * Create list of resolved dependencies for a current project for purposes of saving it into
+		 * a manifest. {@code customConfiguration} or @{code runtime} configuration is used
+		 */
+		private List<MvnArtifact> getResolvedDependencies() {
+			Set<MvnArtifact> index = new HashSet<MvnArtifact>();
+			List<MvnArtifact> mvnuris = new ArrayList<MvnArtifact>();
+			String cfgname = (this.extension.getCustomConfiguration() != null)
+					? this.extension.getCustomConfiguration() : "runtime";
+			Configuration cfg = libraries.getProject().getConfigurations().getByName(cfgname);
+			for (ResolvedArtifact a : cfg.getResolvedConfiguration().getResolvedArtifacts()) {
+				ModuleVersionIdentifier id = a.getModuleVersion().getId();
+				// todo do we support custom packaging/classifier?
+				MvnArtifact mvnuri = MvnArtifact.create(id.getGroup(), id.getName(), id.getVersion(), "jar", null);
+				if (!index.contains(mvnuri)) {
+					mvnuris.add(mvnuri);
+					index.add(mvnuri);
+				}
+			}
+			return mvnuris;
 		}
 	}
 
