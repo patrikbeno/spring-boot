@@ -19,6 +19,8 @@ package org.springframework.boot.maven;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
@@ -34,6 +36,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.springframework.boot.loader.mvn.MvnArtifact;
 import org.springframework.boot.loader.tools.Layout;
 import org.springframework.boot.loader.tools.Layouts;
 import org.springframework.boot.loader.tools.Libraries;
@@ -47,6 +50,7 @@ import org.springframework.boot.loader.tools.Repackager;
  * @author Phillip Webb
  * @author Dave Syer
  * @author Stephane Nicoll
+ * @author Patrik Beno
  */
 @Mojo(name = "repackage", defaultPhase = LifecyclePhase.PACKAGE, requiresProject = true, threadSafe = true, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME, requiresDependencyCollection = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class RepackageMojo extends AbstractDependencyFilterMojo {
@@ -155,7 +159,7 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 
 		Libraries libraries = new ArtifactsLibraries(artifacts, this.requiresUnpack);
 		try {
-			repackager.repackage(target, libraries);
+			repackager.repackage(target, libraries, getResolvedDependencies());
 		}
 		catch (IOException ex) {
 			throw new MojoExecutionException(ex.getMessage(), ex);
@@ -169,6 +173,26 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 		}
 	}
 
+	/**
+	 * Create list of resolved dependencies (cfg=default) for a current project for purposes of saving it into
+	 * a manifest.
+	 */
+	private List<MvnArtifact> getResolvedDependencies() {
+		Set<MvnArtifact> index = new HashSet<MvnArtifact>();
+		List<MvnArtifact> mvnuris = new ArrayList<MvnArtifact>();
+
+		for (Dependency d : project.getRuntimeDependencies()) {
+			MvnArtifact mvnuri = MvnArtifact.create(
+					d.getGroupId(), d.getArtifactId(), d.getVersion(), d.getType(), d.getClassifier());
+			if (!index.contains(mvnuri)) {
+				mvnuris.add(mvnuri);
+				index.add(mvnuri);
+			}
+		}
+
+		return mvnuris;
+	}
+
 	private File getTargetFile() {
 		String classifier = (this.classifier == null ? "" : this.classifier.trim());
 		if (classifier.length() > 0 && !classifier.startsWith("-")) {
@@ -179,8 +203,13 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 	}
 
 	public static enum LayoutType {
-		JAR(new Layouts.Jar()), WAR(new Layouts.War()), ZIP(new Layouts.Expanded()), DIR(
-				new Layouts.Expanded()), NONE(new Layouts.None());
+		JAR(new Layouts.Jar()),
+		WAR(new Layouts.War()),
+		ZIP(new Layouts.Expanded()),
+		DIR(new Layouts.Expanded()),
+		MAVEN(new Layouts.Maven()),
+		NONE(new Layouts.None())
+		;
 		private final Layout layout;
 
 		public Layout layout() {

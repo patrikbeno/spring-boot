@@ -144,6 +144,9 @@ public abstract class Launcher {
 		URI location = (codeSource == null ? null : codeSource.getLocation().toURI());
 		String path = (location == null ? null : location.getPath());
 		if (path == null) {
+			path = location.toURL().getPath().replaceFirst("^file:/*(.*)!/*", "$1");
+		}
+		if (path == null) {
 			throw new IllegalStateException("Unable to determine code source archive");
 		}
 		File root = new File(path);
