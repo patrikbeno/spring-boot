@@ -16,7 +16,6 @@
 
 package org.springframework.boot.gradle.run;
 
-import java.util.Collections;
 import java.util.concurrent.Callable;
 
 import org.gradle.api.Action;
@@ -75,14 +74,9 @@ public class RunPluginFeatures implements PluginFeatures {
 		run.getConventionMapping().map("jvmArgs", new Callable<Object>() {
 			@Override
 			public Object call() throws Exception {
-				if (project.hasProperty("applicationDefaultJvmArgs")) {
-					return project.property("applicationDefaultJvmArgs");
-				}
-				else {
-					return Collections.emptyList();
-				}
-
+				return project.property("applicationDefaultJvmArgs");
 			}
 		});
 	}
+
 }

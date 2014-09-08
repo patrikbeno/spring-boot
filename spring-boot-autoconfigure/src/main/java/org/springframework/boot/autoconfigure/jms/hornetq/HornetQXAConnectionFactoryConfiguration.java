@@ -19,7 +19,6 @@ package org.springframework.boot.autoconfigure.jms.hornetq;
 import javax.jms.ConnectionFactory;
 import javax.transaction.TransactionManager;
 
-import org.hornetq.jms.client.HornetQConnectionFactory;
 import org.hornetq.jms.client.HornetQXAConnectionFactory;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -28,7 +27,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.jta.XAConnectionFactoryWrapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 
 /**
  * Configuration for HornetQ XA {@link ConnectionFactory}.
@@ -42,8 +40,7 @@ import org.springframework.context.annotation.Primary;
 @ConditionalOnBean(XAConnectionFactoryWrapper.class)
 class HornetQXAConnectionFactoryConfiguration {
 
-	@Primary
-	@Bean(name = { "jmsConnectionFactory", "xaJmsConnectionFactory" })
+	@Bean
 	public ConnectionFactory jmsConnectionFactory(ListableBeanFactory beanFactory,
 			HornetQProperties properties, XAConnectionFactoryWrapper wrapper)
 			throws Exception {
@@ -52,10 +49,4 @@ class HornetQXAConnectionFactoryConfiguration {
 				.createConnectionFactory(HornetQXAConnectionFactory.class));
 	}
 
-	@Bean
-	public ConnectionFactory nonXaJmsConnectionFactory(ListableBeanFactory beanFactory,
-			HornetQProperties properties) {
-		return new HornetQConnectionFactoryFactory(beanFactory, properties)
-				.createConnectionFactory(HornetQConnectionFactory.class);
-	}
 }

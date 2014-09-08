@@ -19,6 +19,8 @@ package org.springframework.boot.autoconfigure.jdbc.metadata;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.junit.Before;
 import org.junit.Test;
+import org.springframework.boot.autoconfigure.jdbc.metadata.CommonsDbcpDataSourcePoolMetadata;
+import org.springframework.boot.autoconfigure.jdbc.metadata.DataSourcePoolMetadata;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;

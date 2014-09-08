@@ -368,13 +368,12 @@ For example, the following YAML document:
 
 [source,yaml,indent=0]
 ----
-	environments:
-		dev:
-			url: http://dev.bar.com
-			name: Developer Setup
-		prod:
-			url: http://foo.bar.com
-			name: My Cool App
+	dev:
+		url: http://dev.bar.com
+		name: Developer Setup
+	prod:
+		url: http://foo.bar.com
+		name: My Cool App
 ----
 
 Would be transformed into these properties:
@@ -435,7 +434,7 @@ placeholders syntax to access YAML properties.
 
 [[boot-features-external-config-multi-profile-yaml]]
 ==== Multi-profile YAML documents
-You can specify multiple profile-specific YAML documents in a single file by
+You can specify multiple profile-specific YAML document in a single file by
 by using a `spring.profiles` key to indicate when the document applies. For example:
 
 [source,yaml,indent=0]
@@ -453,10 +452,6 @@ by using a `spring.profiles` key to indicate when the document applies. For exam
 	server:
 		address: 192.168.1.120
 ----
-
-In the example above, the `server.address` property will be `127.0.0.1` if the
-`development` profile is active. If the `development` and `production` profiles are *not*
-enabled, then the value for the property will be `192.168.1.100`
 
 
 
@@ -642,10 +637,6 @@ For example, when an application with following properties is run using the swit
 	spring.profiles: prod
 	spring.profiles.include: proddb,prodmq
 ----
-
-NOTE: Remember that the `spring.profiles` property can be defined in a YAML document
-to determine when this particular document is included in the configuration. See
-<<howto-change-configuration-depending-on-the-environment>> for more details.
 
 
 
@@ -990,8 +981,8 @@ support a uniform Java DSL for customizing the error handling. For example:
 	private static class MyCustomizer implements EmbeddedServletContainerCustomizer {
 
 		@Override
-		public void customize(ConfigurableEmbeddedServletContainer container) {
-            container.addErrorPages(new ErrorPage(HttpStatus.BAD_REQUEST, "/400"));
+		public void customize(ConfigurableEmbeddedServletContainer factory) {
+            factory.addErrorPages(new ErrorPage(HttpStatus.BAD_REQUEST, "/400"));
 		}
 
 	}
@@ -1064,8 +1055,8 @@ class for a complete list.
 If you need to configure your embdedded servlet container programmatically you can register
 a Spring bean that implements the `EmbeddedServletContainerCustomizer` interface.
 `EmbeddedServletContainerCustomizer` provides access to the
-`ConfigurableEmbeddedServletContainer` which includes numerous customization setter
-methods.
+`ConfigurableEmbeddedServletContainerFactory` which includes numerous customization
+setter methods.
 
 [source,java,indent=0]
 ----
@@ -1086,7 +1077,7 @@ methods.
 
 
 [[boot-features-customizing-configurableembeddedservletcontainerfactory-directly]]
-===== Customizing ConfigurableEmbeddedServletContainer directly
+===== Customizing ConfigurableEmbeddedServletContainerFactory directly
 If the above customization techniques are too limited, you can register the
 `TomcatEmbeddedServletContainerFactory` or `JettyEmbeddedServletContainerFactory` bean
 yourself.
@@ -1250,9 +1241,7 @@ Production database connections can also be auto-configured using a pooling
 
 * We prefer the Tomcat pooling `DataSource` for its performance and concurrency, so if
   that is available we always choose it.
-* If HikariCP is available we will use it
-* If Commons DBCP is available we will use it, but we don't recommend it in production.
-* Lastly, if Commons DBCP2 is available we will use it
+* If commons-dbcp is available we will use that, but we don't recommend it in production.
 
 If you use the `spring-boot-starter-jdbc` or `spring-boot-starter-data-jpa`
 ``starter POMs'' you will automcatically get a dependency to `tomcat-jdbc`.
@@ -1858,20 +1847,6 @@ resolved against their provided names.
 
 
 
-[[boot-features-jms-jndi]]
-==== Using a JNDI ConnectionFactory
-If you are running your application in an Application Server Spring Boot will attempt to
-locate a JMS `ConnectionFactory` using JNDI. By default the locations `java:/JmsXA` and
-`java:/XAConnectionFactory` will checked. You can use the
-`spring.jms.jndi-name` property if you need to specify an alternative location:
-
-[source,properties,indent=0]
-----
-	spring.jms.jndi-name=java:/MyConnectionFactory
-----
-
-
-
 [[boot-features-using-jms-template]]
 [[boot-features-using-jms-sending]]
 ==== Sending a message
@@ -1986,38 +1961,6 @@ JMS by looking for a `ConnectionFactory` at the JNDI path `java:/JmsXA` or
 `java:/XAConnectionFactory` and you can use the
 <<boot-features-connecting-to-a-jndi-datasource, `spring.datasource.jndi-name` property>>
 to configure your `DataSource`.
-
-
-
-=== Mixing XA and non-XA JMS connections
-When using JTA, the primary JMS `ConnectionFactory` bean will be XA aware and participate
-in distributed transactions. In some situations you might want to process certain JMS
-messages using a non-XA `ConnectionFactory`. For example, your JMS processing logic might
-take longer than the XA timeout.
-
-If you want to use a non-XA `ConnectionFactory` you can inject the
-`nonXaJmsConnectionFactory` bean rather than the `@Primary` `jmsConnectionFactory` bean.
-For consistency the `jmsConnectionFactory` bean is also provided using the bean alias
-`xaJmsConnectionFactory`.
-
-For example:
-
-[source,java,indent=0,subs="verbatim,quotes,attributes"]
-----
-	// Inject the primary (XA aware) ConnectionFactory
-	@Autowired
-	private ConnectionFactory defaultConnectionFactory;
-
-	// Inject the XA aware ConnectionFactory (uses the alias and injects the same as above)
-	@Autowired
-	@Qualifier("xaJmsConnectionFactory")
-	private ConnectionFactory xaConnectionFactory;
-
-	// Inject the non-XA aware ConnectionFactory
-	@Autowired
-	@Qualifier("nonXaJmsConnectionFactory")
-	private ConnectionFactory nonXaConnectionFactory;
-----
 
 
 

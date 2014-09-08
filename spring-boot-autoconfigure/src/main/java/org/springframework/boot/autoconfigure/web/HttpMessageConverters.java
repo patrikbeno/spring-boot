@@ -69,54 +69,26 @@ public class HttpMessageConverters implements Iterable<HttpMessageConverter<?>> 
 	 * converters.
 	 * @param additionalConverters additional converters to be added. Items are added just
 	 * before any default converter of the same type (or at the front of the list if no
-	 * default converter is found) The {@link #postProcessConverters(List)} method can be
-	 * used for further converter manipulation.
+	 * default converter is found) The {@link #getConverters()} methods can be used for
+	 * further converter manipulation.
 	 */
 	public HttpMessageConverters(Collection<HttpMessageConverter<?>> additionalConverters) {
-		this(true, additionalConverters);
-	}
-
-	/**
-	 * Create a new {@link HttpMessageConverters} instance with the specified converters.
-	 * @param addDefaultConverters if default converters should be added
-	 * @param converters converters to be added. Items are added just before any default
-	 * converter of the same type (or at the front of the list if no default converter is
-	 * found) The {@link #postProcessConverters(List)} method can be used for further
-	 * converter manipulation.
-	 */
-	public HttpMessageConverters(boolean addDefaultConverters,
-			Collection<HttpMessageConverter<?>> converters) {
-		List<HttpMessageConverter<?>> combined = new ArrayList<HttpMessageConverter<?>>();
+		List<HttpMessageConverter<?>> converters = new ArrayList<HttpMessageConverter<?>>();
 		List<HttpMessageConverter<?>> processing = new ArrayList<HttpMessageConverter<?>>(
-				converters);
-		if (addDefaultConverters) {
-			for (HttpMessageConverter<?> defaultConverter : getDefaultConverters()) {
-				Iterator<HttpMessageConverter<?>> iterator = processing.iterator();
-				while (iterator.hasNext()) {
-					HttpMessageConverter<?> candidate = iterator.next();
-					if (ClassUtils.isAssignableValue(defaultConverter.getClass(),
-							candidate)) {
-						combined.add(candidate);
-						iterator.remove();
-					}
+				additionalConverters);
+		for (HttpMessageConverter<?> defaultConverter : getDefaultConverters()) {
+			Iterator<HttpMessageConverter<?>> iterator = processing.iterator();
+			while (iterator.hasNext()) {
+				HttpMessageConverter<?> candidate = iterator.next();
+				if (ClassUtils.isAssignableValue(defaultConverter.getClass(), candidate)) {
+					converters.add(candidate);
+					iterator.remove();
 				}
-				combined.add(defaultConverter);
 			}
+			converters.add(defaultConverter);
 		}
-		combined.addAll(0, processing);
-		combined = postProcessConverters(combined);
-		this.converters = Collections.unmodifiableList(combined);
-	}
-
-	/**
-	 * Method that can be used to post-process the {@link HttpMessageConverter} list
-	 * before it is used.
-	 * @param converters a mutable list of the converters that will be used.
-	 * @return the final converts list to use
-	 */
-	protected List<HttpMessageConverter<?>> postProcessConverters(
-			List<HttpMessageConverter<?>> converters) {
-		return converters;
+		converters.addAll(0, processing);
+		this.converters = Collections.unmodifiableList(converters);
 	}
 
 	private List<HttpMessageConverter<?>> getDefaultConverters() {
@@ -155,8 +127,8 @@ public class HttpMessageConverters implements Iterable<HttpMessageConverter<?>> 
 	}
 
 	/**
-	 * Return an immutable list of the converters in the order that they will be
-	 * registered.
+	 * Return a mutable list of the converters in the order that they will be registered.
+	 * Values in the list cannot be modified once the bean has been initialized.
 	 * @return the converters
 	 */
 	public List<HttpMessageConverter<?>> getConverters() {

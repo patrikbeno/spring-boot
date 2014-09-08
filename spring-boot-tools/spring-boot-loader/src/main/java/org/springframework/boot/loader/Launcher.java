@@ -29,7 +29,7 @@ import java.util.logging.Logger;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.ExplodedArchive;
 import org.springframework.boot.loader.archive.JarFileArchive;
-import org.springframework.boot.loader.jar.JarFile;
+import org.springframework.boot.loader.util.UrlSupport;
 
 /**
  * Base class for launchers that can start an application with a fully configured
@@ -56,7 +56,7 @@ public abstract class Launcher {
 	 */
 	protected void launch(String[] args) {
 		try {
-			JarFile.registerUrlProtocolHandler();
+			UrlSupport.registerUrlProtocolHandlers();
 			ClassLoader classLoader = createClassLoader(getClassPathArchives());
 			launch(args, getMainClass(), classLoader);
 		}

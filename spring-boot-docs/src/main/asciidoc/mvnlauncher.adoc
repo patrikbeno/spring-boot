@@ -1,0 +1,553 @@
+# SpringBoot MvnLauncher
+:toc:
+
+## Motivation
+
+Tired of classpath, giant web app archives uploads, complex assemblies and complicated deployment and distribution models?
+Why not just run the application directly from online Maven repository?
+
+## Solution
+
+*SpringBoot* supports some standard layouts of executable archives: `JAR`, `WAR` and `EXPANDED`. All these assume dependencies are downloaded at build time and a self-contained archive or directory is assembled. Specific `Launcher` implementation takes care of configuring the class loader from the archive or a folder and bootstrapping the application.
+
+New `MAVEN` layout type is introduced (including required support in SpringBoot Gradle and Maven plugins). This layout does not include any libraries (dependencies) in an output artifact. Instead, it includes only a tiny `spring-boot-loader` bootstrap code (as per SpringBoot design) and populates `Spring-Boot-Dependencies` manifest attribute which contains list of qualified, build-time resolved Maven artifact URIs of all runtime-scoped, transitive project dependencies footnote:[this should be configurable].
+  
+Maven URIs use the form `<groupId>:<artifactId>:<version>[:<packaging>[:<classifier>]]`.
+  
+`Spring-Boot-Dependencies` attribute is used at runtime by new `MvnLauncher` implementation associated with `MAVEN` layout - referenced artifacts are resolved, downloaded, cached and used to populate application's classpath.
+
+## Features
+
+ - supports any URL-based Maven repository using default Maven2 repository layout, including `classpath:` scheme.
+ - HTTP Basic authentication for `http:` and `https:` URLs with externalized password encryption support
+ - smart caching
+ - snapshot updates check
+ - persistent releases (once cached, no more update checks)
+ - offline mode
+ - configurable update interval
+ - ignorable cache (always download fresh copy)
+ - run directly from local repo
+ - optional SHA1 download verification
+ - concurrent cache usage support
+ - configuration via system properties
+ - cascading overriddable defaults (library, application, system, user, ...)
+ - generic launcher can use any MvnLauncher-enabled artifact as an entry point.
+ - secure credentials store
+ - tiny, fast bootstrap (110+ KB, overhead ~35 msec in offline mode / non-expired cache)
+
+## Configuration
+
+Following is the list of supported system properties used to configure `MvnLauncher` 's behavior.
+
+MvnLauncher.apphome::
+	Particular application home directory; Usually not a current directory, not a user directory, not any generic shared system
+	folder. Typically, if you wrap the launcher up in a script, you can override this to set appropriate application
+	home folder (installation or data home). +
+	Detault: `${java.home}` (which is more sound than "undefined" value in this context)
+
+MvnLauncher.defaults::
+	Configuration defaults (comma-delimited list of property resources). +
+	Default: +
+		`file:springboot.properties` (highest priority) +
+		`file:///${MvnLauncher.apphome}/springboot.properties` +
+		`file:///${user.home}/.springboot/defaults.properties` +
+		`file:///etc/springboot/defaults.properties` +
+		`classpath:META-INF/springboot/defaults.properties` (lowest priority)
+
+MvnLauncher.debug::
+	Enables debug output of MvnLauncher's operations. +
+	Defaults: `false`
+
+MvnLauncher.cache::
+	MvnLauncher's cache directory. +
+	Default: `file://${user.home}/.springboot/cache`
+
+MvnLauncher.offline::
+	Disables all online operations. Artifacts must be cached locally to be resolved. +
+	Default: `false`
+
+MvnLauncher.updateInterval::
+	Specifies interval (in minutes) within which result of the latest successful update operation remains valid.
+	This means that remote repository is checked only once in a specified interval. In other words, if you run
+	the application twice, it will check for updates only once (first run). Second run will behave as if the offline
+	mode is enabled (no remote repository contact whatsoever, unless the dependency is missing). Next update check will
+	be allowed only after the specified update interval elapsed. +
+	Default: `1 day` (`1440 minutes`)
+
+MvnLauncher.verify::
+	Enable download verification using the repository-provided SHA1 hash. +
+	Default: `true`
+
+MvnLauncher.ignoreCache::
+	Bypass MvnLauncher's cache: always download latest version from remote repository. +
+	Default: `false`
+
+MvnLauncher.failOnError::
+	Fail when any of the required artifacts is invalid or unresolved. This can be disabled if some optional artifact
+	is missing or keeps failing but its absence does not actually affect the application.
+	If you disable this while some mandatory artifact is unavailable, you'll most likely end up with
+	some `ClassNotFoundException`s and `NoClassDefFoundError`s. +
+	Default: `true`
+
+MvnLauncher.cacheFileProtocol::
+	If set, MvnLauncher will download and cache also `file://` repositories. By default such URLs are used directly
+	to populate class loader but in some cases caching may be enabled to avoid the filesystem conflicts (e.g. locks
+	on Windows or concurrent file modifications in general). +
+	Default: `false`
+
+MvnLauncher.updateReleases::
+	By default, release artifacts are cached forever and never checked for updates. In some cases, overriding this may
+	be useful (e.g. when 'release' artifact has been updated in remote repository ). +
+	Default: `false`
+
+MvnLauncher.updateSnapshots::
+	Snapshot artifacts are always checked for updates. This may be disabled to speed-up application startup if snapshots
+	are known to be up-to-date or if the updates are irrelevant or undesirable. +
+	Default: `true`
+
+MvnLauncher.execute::
+	If reset (`false`), MvnLauncher checks for and downloads updates but won't actually execute the application. +
+	Default: `true`
+
+MvnLauncher.update::
+	Shortcut configuration property designed to force global update without the need to separately set individual
+	fine-grained properties. The `false` value is a low-priority setting (can be overridden using other fine-grained
+	properties. However, the `true` value is a high priority setting and takes precedence over all other fine-grained
+	properties. (While this may sound overly complex and not very intuitive, the general guideline is pretty simple:
+	don't touch this unless you want to force global update check of all the libraries/dependencies, in which case,
+	just set it to `true`.) +
+	Default: `false`.
+
+MvnLauncher.showClasspath::
+	Show final classpath used to configure the class loader. Actual file system URLs are shown in the same order as passed
+	to class loader. +
+	Default: `false`
+
+MvnLauncher.repositoryUrl::
+	Maven repository URL. +
+	Default: `file://${user.home}/.m2/repository`
+
+MvnLauncher.repositoryUsername::
+MvnLauncher.repositoryPassword::
+	Optional Maven repository username/password pair. If undefined, credentials corresponding to a given repository URL
+	are are looked up in `MvnLauncher.credentials` file. If still undefined, a connection is attempted without
+	credentials. +
+	Credentials, if required, must be provided on command line or in user's credential's file. User is never prompted. +
+	If the credentials are provided using these parameters, they are encrypted and written to user's credentials
+	database (assuming `MvnLauncher.saveCredentials=true`).
+
+MvnLauncher.key::
+	Path to encryption key for credentials database. If the key  does not exist, it is created (generated). The key file
+	is considered a confidential information and should be protected or maybe even relocated (e.g. to a portable drive). +
+	Defaults: `${user.home}/.springboot/credentials.key`
+
+MvnLauncher.credentials::
+	User-specific credential database. For every repository URL, a username, and an encrypted password is stored.
+	If the user provides username and password for the first time for any given repository URL, password
+	is encrypted and the whole group (URL, username, password) is saved in the database. +
+	Defaults: `${user.home}/.springboot/credentials.properties`
+
+MvnLauncher.saveCredentials::
+	If set, Maven repository connection information (URL, username, password) is saved in credentials database, if there
+	is entry for a given repository, or a password is updated. +
+	Default: `false`
+
+MvnLauncher.artifact::
+	Maven URI of the application entry point in form `groupId:artifactId:version[:packaging[:classifier]]`. +
+	If *defined*, launcher resolves specified URI and uses resolved artifact's metadata to configure classpath
+	and main class (`Spring-Boot-Dependencies`, `Start-Class`). This option enables using SpringBoot MvnLauncher
+	as generic repo-based application launcher (see `io.jrevolt.mvnlauncher` below). +
+	If *undefined*, launcher proceeds as usual, using *self* archive to load dependencies and resolve main class. +
+	Default: `undefined`
+
+> Hint: Run launcher/application with `-DMvnLauncher.debug=true` to see actual configuration values.
+
+## Java Archive Manifest
+
+Main-Class::
+	Well-known legacy attribute defined by JVM. It specifies Java application entry point from JVM's point of view.
+	With *SpringBoot MvnLauncher* it usually points to `org.springframework.boot.loader.MvnLauncher` which orchestrates
+	all the magic of dependency download and resolution for you. However, this can be overriden if you need to do some
+	bootstrap environment or program argument pre-processing before the launcher takes off.
+
+Start-Class::
+	This is defined by SpringBoot and semantically equivalent of original JVM's `Main-Class`.
+
+Spring-Boot-Dependencies::
+	Comma-delimited list of Maven artifacts URIs in form `$groupId:$artifactId:$version[:$packaging[:$classifier]]`.
+	(Optional `packaging` defaults to `jar`, and `classifier` may be `undefined`) +
+	Each of these URIs is resolved to a URL relative to configured Maven repository (`MvnLauncher.repositoryUrl`),
+	and downloaded to local cache (if not yet available in cache). +
+	Resulting cached `file:*` is used to populate *SpringBoot* class loader.
+
+Manifest like this is generated by both Maven and Gradle plugins in
+https://github.com/patrikbeno/spring-boot/commits/MvnLauncher[MvnLauncher] branch.
+
+## Caching
+
+### Concurrent Cache Use
+
+*SpringBoot MvnLauncher* cache can be potentially used by multiple applications/processes. Cache implementation
+is generally safe for concurrent use because it is write-only:
+
+ - **Release** artifacts are usually just written once on first download and never touched again
+   (exception: `MvnLauncher.updateReleases`).
+ - **Snapshot** artifacts are saved using their original unique time-stamped file names as resolved
+   from repository-provided metadata, therefore they are basically write-only like releases.
+ - Files are basically added, not overwritten.
+ - Artifacts are downloaded into unique temporary file within the destination folder in cache, and subsequently renamed
+   to final name. While download operation can be relatively slow, rename is fast.
+ - In an unlikely event of concurrent download of the same artifact by multiple processes, conflict is silently resolved
+   by first-write-wins strategy: if the rename operation fails, downloader first checks if the target file already
+   exists (which means it may have been concurrently created by another process), and if this is the case,
+   downloaded copy is discarded and the final file is used "as is".
+
+
+### Cache Maintenance
+
+Over time, old snapshots and obsolete/unused artifacts may accumulate in cache. This situation is not yet dealt with
+by the implementation because of possible concurrency issues as well as the simple fact that *SpringBoot MvnLauncher*
+is and should always be a slick, tiny, thin bootstrap code, and as such should avoid doing too much fancy stuff
+("Make things as simple as possible, but not simpler.").
+
+However, some relatively cheap and robust auto-maintenance tricks might be available, and may be introduced in future versions. 
+
+Other than that, it is quite safe to drop the whole cache if no application is running, and you can afford to let the application auto-download its dependencies at the next run.
+
+## Embedding
+
+Launcher API supports custom post-bootstrap resolution of artifacts and creation of additional class loaders.
+
+[source,java]
+----
+MvnLauncher launcher = new org.springframework.boot.loader.MvnLauncher();
+MvnArtifact uri = MvnArtifact.parse("com.example.project:component:1.0");
+ClassLoader parent = Thread.currentThread.getContextClassLoader();
+ClassLoader cl = launcher.resolve(uri, parent);
+Thread.currentThread().setContextClassLoader(cl);
+Class cls = Class.forName("com.example.project.component.MyClass", cl);
+Runnable r = (Runnable) cls.newInstance();
+r.run();
+----
+
+## Credentials Encryption
+
+To avoid plain-text passwords in configuration, repository credentials are encrypted using the deployment-specific, on-demand, auto-generated encryption key (`MvnLauncher.credentialsKey`), saved in a local, user-specific, per-URL credential store (`MvnLauncher.credentials`, `MvnLauncher.saveCredentials`), and later automatically retrieved, decrypted and used.
+
+To protect the encrypted data, you must protect the generated key file. Without the key file, encrypted data is practically unreachable.footnoteref:[secure,Key is as secure as the encryption cipher]
+
+## Multiple Repositories
+
+Intentionally unsupported. *SpringBoot MvnLauncher* is not a build system. It is assumed that if you choose
+to deploy/update your application using *SpringBoot MvnLauncher*, you will also provide a single central repository
+as a distribution site, typically http://www.sonatype.org/nexus[Sonatype Nexus] with a single hosted repository for your binaries
+and a several proxy repositories for your third-party dependencies, all grouped under standard `public` repository
+group (anonymous or not).
+
+## Artifact Status
+
+When `MvnLauncher.debug` is enabled, resolver reports status of individual dependencies:
+
+[cols="1,4", options="header"]
+|===
+| Status | Description
+
+| *Downloaded*
+| Artifact was not available in local cache and has been downloaded from remote repository
+
+| *Updated*
+| Artifact was available in local cache but updated version has been found on remote, and it has been downloaded
+
+| *Not Modified*
+| A remote repository has been checked for an updated version of the artifact but the local cached copy matches the one available on remote (typical for snapshots)
+
+| *Cached*
+| Artifact is available locally; remote has not been checked for updates; typical for releases or non-expired snapshots (see `MvnLauncher.updateInterval`)
+
+| *Not Found*
+| Artifact is unavailable in local cache nor remote repository (remote is checked in online mode only)
+
+| *Invalid*
+| Artifact copy is invalid (most likely SHA1 verification failure)
+|===
+
+## Generic Launcher
+
+``` bash
+$ java -jar spring-boot-loader-$version.jar [options] artifact [parameters]
+```
+
+where
+
+ - *options*: Any MvnLauncher.* configuration option in the form `-DMvnLauncher.NAME=VALUE` or `--MvnLauncher.NAME=VALUE`
+ - *parameters*: Mix of program parameters and MvnLauncher configuration options. Any parameter matching
+   `-DMvnLauncher.NAME=VALUE` or `--MvnLauncher.NAME=VALUE` pattern is parsed, propagated into system properties, and
+   removed from parameters. To prevent MvnLauncher from processing such parameters, use standard `--` separator.
+
+### mvnlauncher.sh
+
+``` bash
+#!/bin/bash
+path="$(dirname $(realpath $0))"
+artifact="spring-boot-loader-1.2.0.BUILD-SNAPSHOT.jar"
+export JAVA_HOME="${JAVA_HOME:-/opt/jre8}"
+JAVA_OPTS="${JAVA_OPTS:-}"
+APP_HOME=${APP_HOME:-$path}
+${JAVA_HOME}/bin/java ${JAVA_OPTS} -jar ${path}/${artifact} --MvnLauncher.apphome=${APP_HOME} $*
+```
+
+### myapplication.sh
+
+``` bash
+#!/bin/bash
+mvnlauncher.sh com.example.project:module:1.0 $*
+```
+
+### Example
+
+``` bash
+$ java -jar /path/to/spring-boot-loader-1.1.5.BUILD-SNAPSHOT.jar \
+	"company.project:module:1.0" \ <1>
+	--MvnLauncher.debug=true --MvnLauncher.updateInterval=15 <2> \
+	"1st argument" \
+	--MvnLauncher.updateReleases=true \ <3>
+	"2nd argument" \
+	-- \ <4>
+	"--MvnLauncher.passThisOneToApplication=please" \ <5>
+	"4th argument"
+```
+
+<1> Maven artifact URI of the main (root) artifact
+<2> some launcher options
+<3> another launcher option mixed in main artifact's program arguments
+<4> instructs launcher to stop scanning command line arguments for futher launcher options
+<5> looks like launcher option but it is ignored by launcher and passed to main application unaltered
+
+
+## Case Study
+
+Of course, some of you out there, folks, might not be persuaded that this is a viable approach. Granted, this may not
+be useful in every conceivable use case scenario.
+
+The reference setup includes system-wide Nexus repository, reachable and used by each and every single one of about
+100 machines in all the environments (development, integration, test, production, etc). GitFlow-inspired development
+process provides staging branches automatically monitored and built by the TeamCity instance. A simple push/merge
+into appropriate staging branch is detected by the TeamCity CI, and  the artifacts are updated in Nexus.
+Each branch's build is unique (staging branch name is propagated into a Maven artifact version).
+Until the release is production ready, final and released, we're using staging-branch snapshots.
+
+Next time the application is launched, it is automatically updated from Nexus repository (snapshot update).
+No configuration changes are necessary. Snapshots for individual staging environments (`DEV`, `INT`, `TEST`)
+are isolated using Git branches and branch-specific snapshot builds (`develop-SNAPSHOT`, `integration-SNAPSHOT`,
+`1.0-SNAPSHOT`)
+
+## Examples
+
+### Gradle Build
+
+Fragment from the Gradle build script: 
+
+``` Groovy
+buildscript {
+   dependencies {
+      classpath("org.springframework.boot:spring-boot-gradle-plugin:1.1.5.BUILD-SNAPSHOT")
+   }
+}
+
+apply plugin: 'spring-boot'
+
+springBoot {
+   mainClass = "mycompany.myproject.mymodule.Main"
+   layout = "MAVEN"
+}
+```
+
+### Maven Build
+
+Fragment from Maven build configuration:
+
+``` xml
+<project>
+   ...
+   <build>
+      <plugins>
+         <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+            <version>${springboot.version}</version>
+            <executions>
+               <execution>
+                  <goals>
+                     <goal>repackage</goal>
+                  </goals>
+                  <configuration>
+                     <layout>MAVEN</layout>
+                     <mainClass>mycompany.myproject.mymodule.Main</mainClass>
+                  </configuration>
+               </execution>
+            </executions>
+         </plugin>
+      </plugins>
+   </build>
+   ...
+</project>
+```
+
+
+### Manifest
+
+```
+Manifest-Version: 1.0
+Spring-Boot-Version: 1.1.5.BUILD-SNAPSHOT
+Main-Class: org.springframework.boot.loader.MvnLauncher
+Start-Class: io.jrevolt.sysmon.client.ClientMain
+Spring-Boot-Dependencies: io.jrevolt.sysmon:io.jrevolt.sysmon.rest:dev
+ elop-SNAPSHOT:jar,org.springframework.boot:spring-boot-starter:1.1.5.
+ BUILD-SNAPSHOT:jar,org.glassfish.jersey.core:jersey-client:2.8-SNAPSH
+ OT:jar,org.glassfish.jersey.ext:jersey-proxy-client:2.8-SNAPSHOT:jar,
+ com.jcraft:jsch:0.1.51:jar,io.jrevolt.sysmon:io.jrevolt.sysmon.model:
+ develop-SNAPSHOT:jar,javax.ws.rs:javax.ws.rs-api:2.0:jar,org.springfr
+ amework.boot:spring-boot:1.1.5.BUILD-SNAPSHOT:jar,org.springframework
+ .boot:spring-boot-autoconfigure:1.1.5.BUILD-SNAPSHOT:jar,org.springfr
+ amework.boot:spring-boot-starter-logging:1.1.5.BUILD-SNAPSHOT:jar,org
+ .yaml:snakeyaml:1.13:jar,org.glassfish.jersey.core:jersey-common:2.8-
+ SNAPSHOT:jar,org.glassfish.hk2:hk2-api:2.2.0:jar,org.glassfish.hk2.ex
+ ternal:javax.inject:2.2.0:jar,org.glassfish.hk2:hk2-locator:2.2.0:jar
+ ,org.springframework:spring-context:4.1.0.BUILD-SNAPSHOT:jar,org.spri
+ ngframework.boot:spring-boot-loader:1.1.5.BUILD-SNAPSHOT:jar,commons-
+ io:commons-io:2.4:jar,org.apache.commons:commons-lang3:3.2:jar,ch.qos
+ .logback:logback-classic:1.1.2:jar,org.slf4j:jcl-over-slf4j:1.7.7:jar
+ ,org.slf4j:jul-to-slf4j:1.7.7:jar,org.slf4j:log4j-over-slf4j:1.7.7:ja
+ r,javax.annotation:javax.annotation-api:1.2:jar,org.glassfish.jersey.
+ bundles.repackaged:jersey-guava:2.8-SNAPSHOT:jar,org.glassfish.hk2:os
+ gi-resource-locator:1.0.1:jar,org.glassfish.hk2:hk2-utils:2.2.0:jar,o
+ rg.glassfish.hk2.external:aopalliance-repackaged:2.2.0:jar,org.javass
+ ist:javassist:3.18.1-GA:jar,ch.qos.logback:logback-core:1.1.2:jar,com
+ mons-logging:commons-logging:1.1.3:jar,javax.inject:javax.inject:1:ja
+ r,org.springframework:spring-aop:4.1.0.BUILD-SNAPSHOT:jar,org.springf
+ ramework:spring-beans:4.1.0.BUILD-SNAPSHOT:jar,org.springframework:sp
+ ring-expression:4.1.0.BUILD-SNAPSHOT:jar,aopalliance:aopalliance:1.0:
+ jar,org.slf4j:slf4j-api:1.7.7:jar,org.springframework:spring-core:4.1
+ .0.BUILD-SNAPSHOT:jar
+```
+
+### Updating the Application
+
+```
+$ java \
+	-DMvnLauncher.debug=true \
+	-DMvnLauncher.updateOnly=true \
+	-jar io.jrevolt.sysmon.client-develop-SNAPSHOT
+
+MvnLauncher.defaults           : ...
+> Loaded jar:file:/.../io.jrevolt.mvnlauncher-develop-SNAPSHOT.jar!/META-INF/springboot/defaults.properties
+> Loaded file:/.../.springboot/defaults.properties
+MvnLauncher.debug              : true
+MvnLauncher.cache              : C:\...\.springboot\cache
+MvnLauncher.showClasspath      : false
+MvnLauncher.offline            : false
+MvnLauncher.updateInterval     : 1440
+MvnLauncher.verify             : true
+MvnLauncher.ignoreCache        : false
+MvnLauncher.failOnError        : true
+MvnLauncher.cacheFileProtocol  : false
+MvnLauncher.updateReleases     : false
+MvnLauncher.updateSnapshots    : true
+MvnLauncher.updateOnly         : true
+MvnLauncher.repositoryUrl      : https://.../nexus/content/groups/public/
+MvnLauncher.repositoryUsername : nexus
+MvnLauncher.repositoryPassword : ***
+MvnLauncher.artifact           : null
+> Verifying connection to https://.../nexus/content/groups/public/
+## Dependencies (alphabetical):
+Cached         : aopalliance:aopalliance:1.0:jar (4 KB)
+Cached         : ch.qos.logback:logback-classic:1.1.2:jar (264 KB)
+Cached         : ch.qos.logback:logback-core:1.1.2:jar (417 KB)
+Cached         : com.jcraft:jsch:0.1.51:jar (257 KB)
+Cached         : commons-io:commons-io:2.4:jar (180 KB)
+Cached         : commons-logging:commons-logging:1.1.3:jar (60 KB)
+Updated        : io.jrevolt.sysmon:io.jrevolt.sysmon.client:develop-20140722.222218-15:jar (117 KB)
+Updated        : io.jrevolt.sysmon:io.jrevolt.sysmon.model:develop-20140722.222219-6:jar (4 KB)
+Updated        : io.jrevolt.sysmon:io.jrevolt.sysmon.rest:develop-20140722.222219-6:jar (3 KB)
+Cached         : javax.annotation:javax.annotation-api:1.2:jar (25 KB)
+Cached         : javax.inject:javax.inject:1:jar (2 KB)
+Cached         : javax.ws.rs:javax.ws.rs-api:2.0:jar (110 KB)
+Cached         : org.apache.commons:commons-lang3:3.2:jar (375 KB)
+Cached         : org.glassfish.hk2.external:aopalliance-repackaged:2.2.0:jar (14 KB)
+Cached         : org.glassfish.hk2.external:javax.inject:2.2.0:jar (5 KB)
+Cached         : org.glassfish.hk2:hk2-api:2.2.0:jar (139 KB)
+Cached         : org.glassfish.hk2:hk2-locator:2.2.0:jar (167 KB)
+Cached         : org.glassfish.hk2:hk2-utils:2.2.0:jar (65 KB)
+Cached         : org.glassfish.hk2:osgi-resource-locator:1.0.1:jar (19 KB)
+NotModified    : org.glassfish.jersey.bundles.repackaged:jersey-guava:2.8-20140601.110000-2:jar (2224 KB)
+NotModified    : org.glassfish.jersey.core:jersey-client:2.8-20140601.110033-2:jar (148 KB)
+NotModified    : org.glassfish.jersey.core:jersey-common:2.8-20140601.110031-2:jar (693 KB)
+NotModified    : org.glassfish.jersey.ext:jersey-proxy-client:2.8-20140519.233940-1:jar (9 KB)
+Cached         : org.javassist:javassist:3.18.1-GA:jar (697 KB)
+Cached         : org.slf4j:jcl-over-slf4j:1.7.7:jar (16 KB)
+Cached         : org.slf4j:jul-to-slf4j:1.7.7:jar (4 KB)
+Cached         : org.slf4j:log4j-over-slf4j:1.7.7:jar (23 KB)
+Cached         : org.slf4j:slf4j-api:1.7.7:jar (28 KB)
+NotModified    : org.springframework.boot:spring-boot-autoconfigure:1.1.5.BUILD-20140716.214109-6:jar (333 KB)
+Cached         : org.springframework.boot:spring-boot-loader:1.1.5.BUILD-SNAPSHOT:jar (106 KB)
+NotModified    : org.springframework.boot:spring-boot-starter-logging:1.1.5.BUILD-20140716.214113-6:jar (2 KB)
+NotModified    : org.springframework.boot:spring-boot-starter:1.1.5.BUILD-20140716.214113-6:jar (2 KB)
+NotModified    : org.springframework.boot:spring-boot:1.1.5.BUILD-20140716.214100-6:jar (308 KB)
+NotModified    : org.springframework:spring-aop:4.1.0.BUILD-20140611.203954-4:jar (347 KB)
+NotModified    : org.springframework:spring-beans:4.1.0.BUILD-20140611.204001-4:jar (677 KB)
+NotModified    : org.springframework:spring-context:4.1.0.BUILD-20140611.204003-4:jar (985 KB)
+NotModified    : org.springframework:spring-core:4.1.0.BUILD-20140611.204009-4:jar (970 KB)
+NotModified    : org.springframework:spring-expression:4.1.0.BUILD-20140611.204012-4:jar (200 KB)
+Cached         : org.yaml:snakeyaml:1.13:jar (267 KB)
+## Summary: 39 archives, 10281 KB total (resolved in 400 msec, downloaded: 0 KB). Warnings/Errors: 0/0.
+MvnLauncher.updateOnly flag is set. Application will not be executed.
+```
+
+### Typical Configuration
+
+
+## Appendices
+
+### How Do I...
+
+...see actual launcher configuration values?::
+	`--MvnLauncher.debug=true`
+
+...force update check?::
+	`--MvnLauncher.update=true`
+
+...force re-download all dependencies?::
+	`--MvnLauncher.ignoreCache=true`
+
+...update the application but don't actually execute it?::
+	`--MvnLauncher.update=true --MvnLauncher.execute=false`
+
+...make launcher remember my repository password?::
+	`--MvnLauncher.saveCredentials=true --MvnLauncher.repositoryUsername=... --MvnLauncher.repositoryPassword=...`
+
+...make launcher always check for updates of my snapshot dependencies?::
+	`--MvnLauncher.updateInterval=0`
+
+...go completely offline?::
+	`--MvnLauncher.offline=true`
+
+...reset my password in credential store?::
+	Open `${user.home}/.springboot/credentials` (`--MvnLauncher.credentials`) and manually delete the line referring to a related URL.
+
+...use different statically configured defaults per application?::
+	Specify defaults in `${MvnLauncher.apphome}/springboot.properties`
+
+...use different defaults for multiple applications in a shared `MvnLauncher.apphome`?::
+	Customize `--MvnLauncher.appname=springboot` and define `${MvnLauncher.apphome}/${MvnLauncher.appname}.properties`
+
+### Open Issues
+
+### Future Enhancements
+
+- support paralelism during downloads
+
+
+---
+
+-- mailto:patrikbeno@gmail.com[Patrik Beno], May-August 2014
+

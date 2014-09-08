@@ -30,16 +30,6 @@ import org.springframework.util.FileSystemUtils;
  */
 public class ProjectCreator {
 
-	private String gradleVersion;
-
-	public ProjectCreator() {
-		this("1.12");
-	}
-
-	public ProjectCreator(String gradleVersion) {
-		this.gradleVersion = gradleVersion;
-	}
-
 	public ProjectConnection createProject(String name) throws IOException {
 		File projectDirectory = new File("target/" + name);
 		projectDirectory.mkdirs();
@@ -56,7 +46,7 @@ public class ProjectCreator {
 		}
 
 		GradleConnector gradleConnector = GradleConnector.newConnector();
-		gradleConnector.useGradleVersion(this.gradleVersion);
+		gradleConnector.useGradleVersion("1.12");
 
 		((DefaultGradleConnector) gradleConnector).embedded(true);
 		return gradleConnector.forProjectDirectory(projectDirectory).connect();

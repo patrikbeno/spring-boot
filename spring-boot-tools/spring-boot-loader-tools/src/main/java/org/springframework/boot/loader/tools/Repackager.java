@@ -16,12 +16,15 @@
 
 package org.springframework.boot.loader.tools;
 
+import org.springframework.boot.loader.mvn.MvnArtifact;
+import org.springframework.boot.loader.mvn.MvnLauncherBase;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Collections;
+import java.util.List;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
@@ -30,6 +33,7 @@ import java.util.jar.Manifest;
  * '{@literal java -jar}'.
  *
  * @author Phillip Webb
+ * @author Patrik Beno
  */
 public class Repackager {
 
@@ -39,9 +43,13 @@ public class Repackager {
 
 	private static final String BOOT_VERSION_ATTRIBUTE = "Spring-Boot-Version";
 
+	private static final String BOOT_DEPENDENCIES_ATTRIBUTE = MvnLauncherBase.MF_DEPENDENCIES;
+
 	private static final byte[] ZIP_FILE_HEADER = new byte[] { 'P', 'K', 3, 4 };
 
 	private String mainClass;
+
+	private String launcherClass;
 
 	private boolean backupSource = true;
 
@@ -65,6 +73,10 @@ public class Repackager {
 	 */
 	public void setMainClass(String mainClass) {
 		this.mainClass = mainClass;
+	}
+
+	public void setLauncherClass(String launcherClass) {
+		this.launcherClass = launcherClass;
 	}
 
 	/**
@@ -92,7 +104,12 @@ public class Repackager {
 	 * @throws IOException
 	 */
 	public void repackage(Libraries libraries) throws IOException {
-		repackage(this.source, libraries);
+		repackage(this.source, libraries, Collections.<MvnArtifact>emptyList());
+	}
+
+	// legacy (compatibility)
+	public void repackage(File destination, Libraries libraries) throws IOException {
+		repackage(destination, libraries, Collections.<MvnArtifact>emptyList());
 	}
 
 	/**
@@ -102,7 +119,7 @@ public class Repackager {
 	 * @param libraries the libraries required to run the archive
 	 * @throws IOException
 	 */
-	public void repackage(File destination, Libraries libraries) throws IOException {
+	public void repackage(File destination, Libraries libraries, List<MvnArtifact> dependencies) throws IOException {
 		if (destination == null || destination.isDirectory()) {
 			throw new IllegalArgumentException("Invalid destination");
 		}
@@ -126,7 +143,7 @@ public class Repackager {
 		try {
 			JarFile jarFileSource = new JarFile(workingSource);
 			try {
-				repackage(jarFileSource, destination, libraries);
+				repackage(jarFileSource, destination, libraries, dependencies);
 			}
 			finally {
 				jarFileSource.close();
@@ -151,26 +168,21 @@ public class Repackager {
 		}
 	}
 
-	private void repackage(JarFile sourceJar, File destination, Libraries libraries)
+	private void repackage(JarFile sourceJar, File destination, Libraries libraries, List<MvnArtifact> dependencies)
 			throws IOException {
 		final JarWriter writer = new JarWriter(destination);
 		try {
-			final Set<String> seen = new HashSet<String>();
-			writer.writeManifest(buildManifest(sourceJar));
+			writer.writeManifest(buildManifest(sourceJar, dependencies));
 			writer.writeEntries(sourceJar);
+
 			libraries.doWithLibraries(new LibraryCallback() {
 				@Override
 				public void library(Library library) throws IOException {
 					File file = library.getFile();
 					if (isZip(file)) {
 						String destination = Repackager.this.layout
-								.getLibraryDestination(library.getName(),
-										library.getScope());
+								.getLibraryDestination(file.getName(), library.getScope());
 						if (destination != null) {
-							if (!seen.add(destination + library.getName())) {
-								throw new IllegalStateException("Duplicate library "
-										+ library.getName());
-							}
 							writer.writeNestedLibrary(destination, library);
 						}
 					}
@@ -215,7 +227,7 @@ public class Repackager {
 		return true;
 	}
 
-	private Manifest buildManifest(JarFile source) throws IOException {
+	private Manifest buildManifest(JarFile source, List<MvnArtifact> dependencies) throws IOException {
 		Manifest manifest = source.getManifest();
 		if (manifest == null) {
 			manifest = new Manifest();
@@ -229,7 +241,7 @@ public class Repackager {
 		if (startClass == null) {
 			startClass = findMainMethod(source);
 		}
-		String launcherClassName = this.layout.getLauncherClassName();
+		String launcherClassName = (this.launcherClass != null) ? this.launcherClass : this.layout.getLauncherClassName();
 		if (launcherClassName != null) {
 			manifest.getMainAttributes()
 					.putValue(MAIN_CLASS_ATTRIBUTE, launcherClassName);
@@ -245,7 +257,18 @@ public class Repackager {
 		String bootVersion = getClass().getPackage().getImplementationVersion();
 		manifest.getMainAttributes().putValue(BOOT_VERSION_ATTRIBUTE, bootVersion);
 
+		populateDependencies(manifest, dependencies);
+
 		return manifest;
+	}
+
+	protected void populateDependencies(Manifest manifest, List<MvnArtifact> mvnuris) {
+		final StringBuilder deps = new StringBuilder();
+		for (MvnArtifact mvnuri : mvnuris) {
+			if (deps.length() > 0) { deps.append(","); }
+			deps.append(mvnuri.asString());
+		}
+		manifest.getMainAttributes().putValue(BOOT_DEPENDENCIES_ATTRIBUTE, deps.toString());
 	}
 
 	protected String findMainMethod(JarFile source) throws IOException {
