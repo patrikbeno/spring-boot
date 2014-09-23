@@ -38,6 +38,7 @@ import org.junit.rules.TemporaryFolder;
 import org.springframework.boot.loader.TestJarCreator;
 import org.springframework.boot.loader.data.RandomAccessDataFile;
 import org.springframework.boot.loader.util.AsciiBytes;
+import org.springframework.boot.loader.util.UrlSupport;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.util.StreamUtils;
 
@@ -293,7 +294,7 @@ public class JarFileTests {
 
 	@Test
 	public void createUrlFromString() throws Exception {
-		JarFile.registerUrlProtocolHandler();
+        UrlSupport.registerUrlProtocolHandlers();
 		String spec = "jar:" + this.rootJarFile.toURI() + "!/nested.jar!/3.dat";
 		URL url = new URL(spec);
 		assertThat(url.toString(), equalTo(spec));
@@ -309,7 +310,7 @@ public class JarFileTests {
 
 	@Test
 	public void createNonNestedUrlFromString() throws Exception {
-		JarFile.registerUrlProtocolHandler();
+        UrlSupport.registerUrlProtocolHandlers();
 		String spec = "jar:" + this.rootJarFile.toURI() + "!/2.dat";
 		URL url = new URL(spec);
 		assertThat(url.toString(), equalTo(spec));
