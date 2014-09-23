@@ -73,6 +73,10 @@ class ProjectLibraries implements Libraries {
 		this.customConfigurationName = customConfigurationName;
 	}
 
+	public Project getProject() {
+		return project;
+	}
+
 	@Override
 	public void doWithLibraries(LibraryCallback callback) throws IOException {
 		Set<GradleLibrary> custom = getLibraries(this.customConfigurationName,

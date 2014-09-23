@@ -30,6 +30,7 @@ import java.util.Set;
  * @author Phillip Webb
  * @author Dave Syer
  * @author Andy Wilkinson
+ * @author Patrik Beno
  */
 public class Layouts {
 
@@ -91,6 +92,21 @@ public class Layouts {
 			return "org.springframework.boot.loader.PropertiesLauncher";
 		}
 
+	}
+
+	/**
+	 * References to all dependencies are stored in archive's manifest for later use
+	 * by {@code MvnLauncher}
+	 * @see org.springframework.boot.loader.MvnLauncher
+	 */
+	static public class Maven extends Jar {
+		@Override
+		public String getLauncherClassName() { return "org.springframework.boot.loader.MvnLauncher"; }
+
+		@Override
+		public String getLibraryDestination(String libraryName, LibraryScope scope) {
+			return null;
+		}
 	}
 
 	/**
