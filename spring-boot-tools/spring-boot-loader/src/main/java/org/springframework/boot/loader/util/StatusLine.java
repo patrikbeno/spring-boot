@@ -61,8 +61,10 @@ public class StatusLine {
 
     static public void resetLine() {
         if (MvnLauncherCfg.statusLine.asBoolean()) {
-            // cmd.exe does not seem to implement <ESC>[2K sequence (clear line)
-            System.out.print("\033[2K\033[K\r");
+            System.out.printf("\r%200s\r", "");
+            System.out.flush();
+            System.err.print("\r");
+            System.err.flush();
         }
     }
 }

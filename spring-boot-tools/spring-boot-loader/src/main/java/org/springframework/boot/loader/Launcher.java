@@ -29,6 +29,7 @@ import java.util.logging.Logger;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.ExplodedArchive;
 import org.springframework.boot.loader.archive.JarFileArchive;
+import org.springframework.boot.loader.util.Log;
 import org.springframework.boot.loader.util.UrlSupport;
 
 /**
@@ -60,8 +61,8 @@ public abstract class Launcher {
 			ClassLoader classLoader = createClassLoader(getClassPathArchives());
 			launch(args, getMainClass(), classLoader);
 		}
-		catch (Exception ex) {
-			ex.printStackTrace();
+		catch (Exception e) {
+			Log.error(e, "Could not launch application");
 			System.exit(1);
 		}
 	}

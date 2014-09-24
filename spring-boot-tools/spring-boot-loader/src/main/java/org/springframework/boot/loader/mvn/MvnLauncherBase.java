@@ -127,12 +127,12 @@ public abstract class MvnLauncherBase extends ExecutableArchiveLauncher {
 		}
 		finally {
 			connector.close();
+            StatusLine.resetLine();
 		}
 	}
 
 	@Override
-	protected void launch(String[] args, String mainClass, ClassLoader classLoader)
-			throws Exception {
+	protected void launch(String[] args, String mainClass, ClassLoader classLoader) throws Exception {
 		if (!MvnLauncherCfg.execute.asBoolean()) {
 			Log.info("Application updated. Execution skipped (%s=false)", MvnLauncherCfg.execute.getPropertyName());
 			return;
