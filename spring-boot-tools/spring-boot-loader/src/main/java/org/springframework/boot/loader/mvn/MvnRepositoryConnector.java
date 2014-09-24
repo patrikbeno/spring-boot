@@ -60,7 +60,7 @@ public class MvnRepositoryConnector {
 	DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 	XPathFactory xpf = XPathFactory.newInstance();
 
-	boolean connectionVerified;
+	boolean connectionVerified = MvnLauncherCfg.offline.asBoolean();
 
 	/**
 	 * If the connection to repository seems invalid, throw an exception
@@ -68,19 +68,28 @@ public class MvnRepositoryConnector {
 	void verifyConnection() {
 		if (connectionVerified) { return; }
 
-		MvnLauncherCredentialStore store = MvnLauncherCredentialStore.instance();
+        MvnLauncherCredentialStore.instance();
 
-		if (credentials == null) {
-			credentials = store.get(repository);
-		}
-		if (credentials == null) {
-			credentials = new MvnRepositoryCredentials(
+        boolean supportsAuthenticatedConnection = repository.getProtocol().matches("https?");
+
+		boolean userDefinedCredentials
+                = MvnLauncherCfg.repositoryUsername.isDefined()
+                && MvnLauncherCfg.repositoryPassword.isDefined()
+                && !MvnLauncherCfg.repositoryPassword.asString().isEmpty();
+
+        boolean saveCredentials = MvnLauncherCfg.saveCredentials.asBoolean()
+                && supportsAuthenticatedConnection
+                && userDefinedCredentials;
+
+        if (saveCredentials) {
+            MvnLauncherCredentialStore.instance().save(new MvnRepositoryCredentials(
                     repository,
                     MvnLauncherCfg.repositoryUsername.asString(),
-                    MvnLauncherCfg.repositoryPassword.asString());
-			if (credentials.hasPassword() && MvnLauncherCfg.saveCredentials.asBoolean()) {
-				store.save(credentials);
-			}
+                    MvnLauncherCfg.repositoryPassword.asString()));
+        }
+        
+		if (supportsAuthenticatedConnection && credentials == null) {
+			credentials = MvnLauncherCredentialStore.instance().get(repository);
 		}
 
         // check http:// and https:// repositories: must be able to connect successfully
@@ -220,7 +229,7 @@ public class MvnRepositoryConnector {
 				return resource(artifact, MvnArtifact.Status.Cached, url, new File(url.getPath()), null);
 			}
 			catch (MalformedURLException e) {
-				throw new RuntimeException(e);
+				throw new MvnLauncherException(e);
 			}
 		}
 
@@ -233,9 +242,11 @@ public class MvnRepositoryConnector {
 			// in offline mode, artifact is either available or not; we're not doing
 			// anything about it
 			if (offline.asBoolean()) {
-				return resource(artifact, f.exists() ? MvnArtifact.Status.Offline
-						: MvnArtifact.Status.NotFound, repository, f, f.exists() ? null
-						: new FileNotFoundException(f.getAbsolutePath()));
+				return resource(
+                        artifact,
+                        f.exists() ? MvnArtifact.Status.Offline : MvnArtifact.Status.NotFound,
+                        repository, f,
+                        f.exists() ? null : new FileNotFoundException(f.getAbsolutePath()));
 			}
 
 			// should we try to update the file?
@@ -390,15 +401,13 @@ public class MvnRepositoryConnector {
 			Thread.currentThread().interrupt();
 		}
 		catch (ExecutionException e) {
-			if (e.getCause() instanceof IOException) {
-				throw (IOException) e.getCause();
-			}
-			if (e.getCause() instanceof RuntimeException) {
-				throw (RuntimeException) e.getCause();
-			}
-			if (e.getCause() instanceof Throwable) {
-				throw new RuntimeException(e);
-			}
+            if (e.getCause() instanceof IOException) {
+                throw (IOException) e.getCause();
+            }
+            if (e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            }
+            throw new MvnLauncherException(e);
 		}
 	}
 
@@ -478,9 +487,9 @@ public class MvnRepositoryConnector {
 			artifact.setError(e);
 
 		}
-		catch (Exception e) {
+		catch (IOException e) {
 			// nope, something went wrong
-			throw new RuntimeException(e);
+            throw new MvnLauncherException(e, "Could not resolve snapshot version of "+artifact);
 		}
         finally {
             StatusLine.pop();
@@ -610,7 +619,7 @@ public class MvnRepositoryConnector {
 	}
 
 	private URLConnection urlcon(URL url) {
-		return urlcon(url, !MvnLauncherCfg.offline.asBoolean());
+		return urlcon(url, connectionVerified);
 	}
 
 	private URLConnection urlcon(URL url, boolean verify) {
@@ -619,12 +628,12 @@ public class MvnRepositoryConnector {
 		}
 		try {
 			URLConnection con = url.openConnection();
-			if (credentials.hasPassword()) { // credentials are lazily initialized in
-												// #verifyConnection()
-				String auth = String.format("%s:%s", credentials.getUserName(),
-						credentials.getPassword());
-				con.setRequestProperty("Authorization", String.format("Basic %s",
-						DatatypeConverter.printBase64Binary(auth.getBytes("UTF-8"))));
+            // credentials are lazily initialized in #verifyConnection()
+			if (credentials != null && credentials.hasPassword()) {
+				String auth = String.format("%s:%s", credentials.getUserName(), credentials.getPassword());
+				con.setRequestProperty(
+                        "Authorization", String.format(
+                        "Basic %s", DatatypeConverter.printBase64Binary(auth.getBytes("UTF-8"))));
 			}
 			return con;
 		}

@@ -16,6 +16,7 @@
 package org.springframework.boot.loader.mvn;
 
 import org.springframework.boot.loader.util.Log;
+import org.springframework.boot.loader.util.StatusLine;
 
 import java.io.*;
 import java.lang.ref.SoftReference;
@@ -68,11 +69,17 @@ class MvnLauncherCredentialStore {
 	private final String ALG = "AES";
 	private final int BITS = 256;
 
+
 	private MvnLauncherCredentialStore() {
 		String key = loadKey();
 		if (key == null) {
-			Log.info("> Missing key: %s. Initializing new one...", keyFile);
-			key = saveKey(generateKey());
+			StatusLine.push("Missing key: %s. Initializing new one...", keyFile);
+            try {
+                key = saveKey(generateKey());
+            } finally {
+                Log.info("Initialized new key file: %s", keyFile);
+                StatusLine.pop();
+            }
 		}
 		this.key = key;
 		this.index = load();
@@ -103,7 +110,7 @@ class MvnLauncherCredentialStore {
 			FileWriter out = new FileWriter(keyFile);
 			out.write(key);
 			out.close();
-			Log.info("> Generated unique user-specific encryption key. Protect the file: %s", keyFile);
+			Log.info("Generated unique user-specific encryption key. Protect the file: %s!", keyFile);
 			return key;
 		}
 		catch (IOException e) {
@@ -141,7 +148,7 @@ class MvnLauncherCredentialStore {
 				MvnRepositoryCredentials creds = new MvnRepositoryCredentials(new URL(
 						url.getProtocol(), url.getHost(), url.getFile()),
 						url.getUserInfo());
-				credentials.put(url, creds);
+				credentials.put(creds.getURL(), creds);
 			}
 			return credentials;
 		}
@@ -154,29 +161,36 @@ class MvnLauncherCredentialStore {
 	}
 
 	void save(MvnRepositoryCredentials creds) {
-		index.put(creds.getURL(), creds);
-		FileWriter out = null;
-		try {
-			Log.debug("> Saving encrypted credentials: %s", dataFile);
-			dataFile.getParentFile().mkdirs();
-			out = new FileWriter(dataFile, true);
-			Formatter f = new Formatter(out);
-			URL u = creds.getURL();
-			String userinfo = (creds.getUserinfo() != null) ? creds.getUserinfo()
-					: encrypt(creds.getUserName() + ":" + creds.getPassword());
-			f.format("%n%s://%s@%s", u.getProtocol(), userinfo, u.getHost());
-			if (u.getPort() != -1) {
-				f.format(":%s", u.getPort());
-			}
-			f.format("%s", u.getFile());
+        index.put(creds.getURL(), creds);
+        save();
+    }
 
+    private void save() {
+		FileWriter out = null;
+        try {
+			dataFile.getParentFile().mkdirs();
+			out = new FileWriter(dataFile);
+			Formatter f = new Formatter(out);
+            for (MvnRepositoryCredentials creds : index.values()) {
+                URL u = creds.getURL();
+                String userinfo = (creds.getUserinfo() != null)
+                        ? creds.getUserinfo()
+                        : encrypt(creds.getUserName() + ":" + creds.getPassword());
+                f.format("%n%s://%s@%s", u.getProtocol(), userinfo, u.getHost());
+                if (u.getPort() != -1) {
+                    f.format(":%s", u.getPort());
+                }
+                f.format("%s", u.getFile());
+            }
+            Log.info("Saved encrypted credentials: %s", dataFile);
 		}
 		catch (IOException e) {
-			Log.error(e.toString());
+			Log.error(e, "Error saving credentials");
 		}
 		finally {
 			if (out != null) try { out.close(); } catch (IOException ignore) {}
-		}
+
+        }
 	}
 
 	// Decodes hexadecimal string and decrypts the provided value using the build-in key.
