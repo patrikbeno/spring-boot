@@ -419,7 +419,7 @@ public class MvnRepositoryConnector {
 		artifact.setStatus(status);
 		artifact.setSource(source);
 		artifact.setFile(file);
-		artifact.setError(error);
+		if (error != null && artifact.getError() == null) { artifact.setError(error); }
 
 		switch (status) {
 		case Downloaded:
