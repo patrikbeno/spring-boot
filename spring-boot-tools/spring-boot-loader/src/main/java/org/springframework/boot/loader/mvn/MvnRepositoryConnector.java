@@ -81,13 +81,16 @@ public class MvnRepositoryConnector {
                 && supportsAuthenticatedConnection
                 && userDefinedCredentials;
 
-        if (saveCredentials) {
-            MvnLauncherCredentialStore.instance().save(new MvnRepositoryCredentials(
+        if (userDefinedCredentials) {
+            credentials = new MvnRepositoryCredentials(
                     repository,
                     MvnLauncherCfg.repositoryUsername.asString(),
-                    MvnLauncherCfg.repositoryPassword.asString()));
+                    MvnLauncherCfg.repositoryPassword.asString());
+            if (saveCredentials) {
+                MvnLauncherCredentialStore.instance().save(credentials);
+            }
         }
-        
+
 		if (supportsAuthenticatedConnection && credentials == null) {
 			credentials = MvnLauncherCredentialStore.instance().get(repository);
 		}
@@ -619,7 +622,7 @@ public class MvnRepositoryConnector {
 	}
 
 	private URLConnection urlcon(URL url) {
-		return urlcon(url, connectionVerified);
+		return urlcon(url, !connectionVerified);
 	}
 
 	private URLConnection urlcon(URL url, boolean verify) {
@@ -631,9 +634,9 @@ public class MvnRepositoryConnector {
             // credentials are lazily initialized in #verifyConnection()
 			if (credentials != null && credentials.hasPassword()) {
 				String auth = String.format("%s:%s", credentials.getUserName(), credentials.getPassword());
-				con.setRequestProperty(
+                con.setRequestProperty(
                         "Authorization", String.format(
-                        "Basic %s", DatatypeConverter.printBase64Binary(auth.getBytes("UTF-8"))));
+                                "Basic %s", DatatypeConverter.printBase64Binary(auth.getBytes("UTF-8"))));
 			}
 			return con;
 		}
