@@ -91,6 +91,10 @@ public class Main {
 			}
 		}
 
+        if (artifact == null) {
+            artifact = System.getProperty("MvnLauncher.artifact");
+        }
+
 		// artifact is mandatory
 		if (artifact == null) {
 			System.err.print(String.format(
