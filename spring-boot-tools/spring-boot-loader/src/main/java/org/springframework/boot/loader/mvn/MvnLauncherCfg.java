@@ -180,29 +180,38 @@ public enum MvnLauncherCfg {
 	 */
 	update(false),
 
+    /**
+     * repository ID
+     */
+    repository,
+
 	/**
 	 * URL of the remote (source) Maven repository. Defaults to local user repository:
 	 * ${user.home}/.m2/repository
 	 */
-	repositoryUrl("file:///${user.home}/.m2/repository/"),
+	url("file:///${user.home}/.m2/repository/"),
 
 	/**
 	 * Remote repository authentication (username). Only basic authentication is supported
 	 * at the moment.
 	 */
-	repositoryUsername,
+	username,
 
 	/**
 	 * Remote repository authentication (password). Only basic authentication is supported
 	 * at the moment.
 	 */
-	repositoryPassword,
+	password,
 
-	credentialsKey("${user.home}/.springboot/credentials.key"),
+	keyfile("${user.home}/.springboot/credentials.key"),
 
-	credentials("${user.home}/.springboot/credentials"),
+	credentials("${user.home}/.springboot/credentials.properties"),
 
-	saveCredentials(false),
+    /**
+     * Saves used-provided credentials in local user's credentials store
+     * @see #credentials
+     */
+	save(false),
 
 	/**
 	 * Maven artifact entrypoint URI in form {@code groupId:artifactId:version}. If
@@ -219,7 +228,7 @@ public enum MvnLauncherCfg {
 		configure();
 	}
 
-	String dflt;
+	private String dflt;
 
 	MvnLauncherCfg() {
 		dflt(null);

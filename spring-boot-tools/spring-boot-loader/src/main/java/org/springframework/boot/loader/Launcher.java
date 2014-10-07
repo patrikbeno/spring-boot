@@ -57,7 +57,7 @@ public abstract class Launcher {
 	 */
 	protected void launch(String[] args) {
 		try {
-			UrlSupport.registerUrlProtocolHandlers();
+			UrlSupport.init();
 			ClassLoader classLoader = createClassLoader(getClassPathArchives());
 			launch(args, getMainClass(), classLoader);
 		}

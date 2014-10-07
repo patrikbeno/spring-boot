@@ -27,11 +27,14 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Formatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+
+import static java.lang.String.format;
 
 /**
  * Secure credentials store implementation. Store contains list of URLs including
@@ -41,12 +44,12 @@ import javax.crypto.spec.SecretKeySpec;
  * Credential store is lazily loaded upon first access, and the encrypted data is
  * decrypted also lazily upon request.
  * @see org.springframework.boot.loader.mvn.MvnLauncherCfg#credentials
- * @see org.springframework.boot.loader.mvn.MvnLauncherCfg#credentialsKey
+ * @see org.springframework.boot.loader.mvn.MvnLauncherCfg#keyfile
  * @see org.springframework.boot.loader.mvn.MvnLauncherCfg#saveCredentials
  * @see java.net.URL#getUserInfo()
  * @author Patrik Beno
  */
-class MvnLauncherCredentialStore {
+public class MvnLauncherCredentialStore {
 
 	static private SoftReference<MvnLauncherCredentialStore> INSTANCE;
 
@@ -58,41 +61,29 @@ class MvnLauncherCredentialStore {
 		return store;
 	}
 
-	private File keyFile = MvnLauncherCfg.credentialsKey.asFile();
+    static public void save(String id, URL url, String username, String password) {
+        instance().save(new MvnRepository(id, url, username, password));
+    }
+
+	private File keyFile = MvnLauncherCfg.keyfile.asFile();
 	private File dataFile = MvnLauncherCfg.credentials.asFile();
 
 	private String key;
-
-	private Map<URL, MvnRepositoryCredentials> index = new LinkedHashMap<URL, MvnRepositoryCredentials>();
+	private Map<String, MvnRepository> indexByRepoId;
 
 	private final Charset UTF8 = Charset.forName("UTF-8");
 	private final String ALG = "AES";
-	private final int BITS = 256;
 
-
-	private MvnLauncherCredentialStore() {
-		String key = loadKey();
-		if (key == null) {
-			StatusLine.push("Missing key: %s. Initializing new one...", keyFile);
-            try {
-                key = saveKey(generateKey());
-            } finally {
-                Log.info("Initialized new key file: %s", keyFile);
-                StatusLine.pop();
-            }
-		}
-		this.key = key;
-		this.index = load();
-	}
-
-	MvnRepositoryCredentials get(URL url) {
-		return index.get(url);
+	MvnRepository get(String repositoryId) {
+        if (key != null) { key = loadKey(); }
+        if (indexByRepoId == null) { indexByRepoId = load(); }
+		return (indexByRepoId != null) ? indexByRepoId.get(repositoryId) : null;
 	}
 
 	String loadKey() {
-		if (!keyFile.exists()) {
-			return null;
-		}
+        if (!keyFile.exists()) {
+            return null;
+        }
 		try {
 			BufferedReader r = new BufferedReader(new FileReader(keyFile));
 			String key = r.readLine();
@@ -104,14 +95,12 @@ class MvnLauncherCredentialStore {
 		}
 	}
 
-	String saveKey(String key) {
+	void saveKey(String key) {
 		try {
 			keyFile.getParentFile().mkdirs();
 			FileWriter out = new FileWriter(keyFile);
 			out.write(key);
 			out.close();
-			Log.info("Generated unique user-specific encryption key. Protect the file: %s!", keyFile);
-			return key;
 		}
 		catch (IOException e) {
 			throw new MvnLauncherException(e, "Error saving key");
@@ -121,68 +110,95 @@ class MvnLauncherCredentialStore {
 	String generateKey() {
 		try {
 			KeyGenerator keygen = KeyGenerator.getInstance(ALG);
-			keygen.init(BITS);
+            // use 256 bits for unlimited strength JCE, fallback to 128 if unavalable
+            int bits = Math.max(256, Math.min(128, Cipher.getMaxAllowedKeyLength(ALG)));
+            keygen.init(bits);
 			SecretKey key = keygen.generateKey();
-			String hexcoded = toHexString(key.getEncoded());
-			return hexcoded;
+            String hexcoded = toHexString(key.getEncoded());
+            return hexcoded;
 		}
 		catch (NoSuchAlgorithmException e) {
 			throw new MvnLauncherException(e, "Error generating key");
 		}
 	}
 
-	Map<URL, MvnRepositoryCredentials> load() {
-		Map<URL, MvnRepositoryCredentials> credentials = new LinkedHashMap<URL, MvnRepositoryCredentials>();
-		if (!dataFile.exists()) {
-			return credentials;
-		}
+    void init() {
+        if (key == null) { key = loadKey(); }
+        if (key == null) { key = generateKey(); }
+        if (indexByRepoId == null) { indexByRepoId = load(); }
+    }
 
-		BufferedReader in = null;
-		try {
-			in = new BufferedReader(new FileReader(dataFile));
-			for (String s; (s = in.readLine()) != null;) {
-				if ((s = s.trim()).isEmpty()) {
-					continue;
-				}
-				URL url = new URL(s);
-				MvnRepositoryCredentials creds = new MvnRepositoryCredentials(new URL(
-						url.getProtocol(), url.getHost(), url.getFile()),
-						url.getUserInfo());
-				credentials.put(creds.getURL(), creds);
-			}
-			return credentials;
+	Map<String, MvnRepository> load() {
+		Map<String, MvnRepository> credentials = new LinkedHashMap<String, MvnRepository>();
+		if (!dataFile.exists()) {
+            return credentials;
 		}
-		catch (IOException e) {
-			throw new MvnLauncherException(e, "damn!");
+		InputStream in = null;
+		try {
+            in = new BufferedInputStream(new FileInputStream(dataFile));
+            Properties props = new Properties();
+            props.load(in);
+            for (String name : props.stringPropertyNames()) {
+                if (!name.endsWith(".url")) { continue; }
+
+                String id = name.replaceFirst("\\.url$", "");
+                String url = props.getProperty(format("%s.url", id));
+                String userinfo = props.getProperty(format("%s.userinfo", id));
+                MvnRepository creds = new MvnRepository(id, new URL(url), userinfo);
+                credentials.put(id, creds);
+            }
+        } catch (IOException e) {
+			Log.error(e, "Error loading credentials: %s", dataFile);
 		}
 		finally {
 			if (in != null) try { in.close(); } catch (IOException ignore) {}
 		}
+        return credentials;
 	}
 
-	void save(MvnRepositoryCredentials creds) {
-        index.put(creds.getURL(), creds);
+	void save(MvnRepository creds) {
+        init();
+        Log.debug("Saving credentials for repository id=%s, user=%s, url=%s", creds.getId(), creds.getUserName(), creds.getURL());
+        indexByRepoId.put(creds.getId(), creds);
         save();
     }
 
-    private void save() {
-		FileWriter out = null;
-        try {
-			dataFile.getParentFile().mkdirs();
-			out = new FileWriter(dataFile);
-			Formatter f = new Formatter(out);
-            for (MvnRepositoryCredentials creds : index.values()) {
-                URL u = creds.getURL();
-                String userinfo = (creds.getUserinfo() != null)
-                        ? creds.getUserinfo()
-                        : encrypt(creds.getUserName() + ":" + creds.getPassword());
-                f.format("%n%s://%s@%s", u.getProtocol(), userinfo, u.getHost());
-                if (u.getPort() != -1) {
-                    f.format(":%s", u.getPort());
-                }
-                f.format("%s", u.getFile());
+    private synchronized void save() {
+        init();
+
+        if (indexByRepoId == null || indexByRepoId.isEmpty()) { return; }
+
+        if (!keyFile.exists()) {
+            StatusLine.push("Missing key. Initializing new one: %s", keyFile);
+            try {
+                if (key == null) { key = generateKey(); }
+                saveKey(key);
+                Log.info("Initialized new key file: %s. Protect it!", keyFile);
+            } catch (Exception e) {
+                Log.warn("Failed to initialize user's key file: %s : %s", keyFile, e);
+            } finally {
+                StatusLine.pop();
             }
-            Log.info("Saved encrypted credentials: %s", dataFile);
+        }
+
+        if (!keyFile.exists()) {
+            Log.error(null, "User's key file does not exist. Cannot save credentials. Check previous errors.");
+            return;
+        }
+
+        Properties props = new Properties();
+
+        for (MvnRepository creds : indexByRepoId.values()) {
+            props.setProperty(format("%s.url", creds.getId()), creds.getURL().toExternalForm());
+            props.setProperty(format("%s.userinfo", creds.getId()), creds.getUserinfo());
+        }
+
+        OutputStream out = null;
+        try {
+            out = new FileOutputStream(dataFile);
+            dataFile.getParentFile().mkdirs();
+            props.store(out, "SpringBoot MvnLauncher Credential Store");
+            Log.info("Saved credentials: %s", dataFile);
 		}
 		catch (IOException e) {
 			Log.error(e, "Error saving credentials");
@@ -196,6 +212,7 @@ class MvnLauncherCredentialStore {
 	// Decodes hexadecimal string and decrypts the provided value using the build-in key.
 	// Throws exception in case of failure.
 	String decrypt(String hexcrypted) {
+        init();
 		if (hexcrypted == null) {
 			return null;
 		}

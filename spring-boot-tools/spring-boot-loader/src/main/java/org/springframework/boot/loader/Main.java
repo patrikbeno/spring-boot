@@ -15,6 +15,12 @@
  */
 package org.springframework.boot.loader;
 
+import org.springframework.boot.loader.mvn.MvnLauncherCfg;
+import org.springframework.boot.loader.mvn.MvnLauncherCredentialStore;
+import org.springframework.boot.loader.util.Log;
+import org.springframework.boot.loader.util.SystemPropertyUtils;
+import org.springframework.boot.loader.util.UrlSupport;
+
 import java.util.LinkedList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -40,8 +46,22 @@ public class Main {
 	 * @see MvnLauncher
 	 */
 	protected void launch(String[] args) {
+
+        UrlSupport.init();
+
         args = processArguments(args);
-		new MvnLauncher().launch(args);
+
+        if (MvnLauncherCfg.save.asBoolean()) {
+            saveCredentials();
+        }
+
+        if (!MvnLauncherCfg.artifact.isDefined()) {
+            Log.info("Usage: %s <groupId>:<artifactId>:<version>[:<packaging>[:<classifier>]] ...%n",
+                    getClass().getName());
+            System.exit(-1);
+        }
+
+        new MvnLauncher().launch(args);
 	}
 
 	/**
@@ -83,32 +103,31 @@ public class Main {
 				// if scan is enabled and current option is not a MvnLauncher option,
 				// assume it's an artifact URI
 				artifact = arg;
-
-			}
+                System.setProperty(MvnLauncherCfg.artifact.getPropertyName(), artifact);
+            }
 			else {
 				// otherwise, just copy the argument as is.
 				arglist.add(arg);
 			}
 		}
 
-        if (artifact == null) {
-            artifact = System.getProperty("MvnLauncher.artifact");
-        }
-
-		// artifact is mandatory
-		if (artifact == null) {
-			System.err.print(String.format(
-                    "Usage: %s <groupId>:<artifactId>:<version>[:<packaging>[:<classifier>]] ...%n",
-                    getClass().getName()));
-			System.exit(-1);
-		}
-
-		// and save it in MvnLauncher.artifact property
-		// don't use MvnLauncherCfg.artifact enum reference here, we don't want to trigger
-		// the configuration sequence yet
-		System.setProperty("MvnLauncher.artifact", artifact);
-
 		return arglist.toArray(new String[arglist.size()]);
 	}
+
+    private void saveCredentials() {
+        String id = MvnLauncherCfg.repository.asString();
+        if (id == null || id.isEmpty()) {
+            Log.error(null, "Rejecting to save credentials with empty repository ID (--%s)", MvnLauncherCfg.repository.getPropertyName());
+        } else {
+            try {
+                MvnLauncherCredentialStore.save(
+                        MvnLauncherCfg.repository.asString(), MvnLauncherCfg.url.asURL(true),
+                        MvnLauncherCfg.username.asString(), MvnLauncherCfg.password.asString());
+            } catch (Exception e) {
+                Log.error(e, "Cannot save repository credentials");
+                System.exit(-1);
+            }
+        }
+    }
 
 }
