@@ -10,11 +10,17 @@ public class UrlSupport {
     private static final String PROTOCOL_HANDLER = "java.protocol.handler.pkgs";
     private static final String HANDLERS_PACKAGE = "org.springframework.boot.loader";
 
+    static {
+        registerUrlProtocolHandlers();
+    }
+
+    static public void init() {}
+
     /**
      * Register a {@literal 'java.protocol.handler.pkgs'} property so that a
      * {@link java.net.URLStreamHandler} will be located to deal with jar URLs.
      */
-    public static void registerUrlProtocolHandlers() {
+    private static void registerUrlProtocolHandlers() {
         String handlers = System.getProperty(PROTOCOL_HANDLER);
         System.setProperty(
                 PROTOCOL_HANDLER,

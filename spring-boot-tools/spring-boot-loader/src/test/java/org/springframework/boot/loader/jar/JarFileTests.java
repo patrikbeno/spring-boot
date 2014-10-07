@@ -294,7 +294,7 @@ public class JarFileTests {
 
 	@Test
 	public void createUrlFromString() throws Exception {
-        UrlSupport.registerUrlProtocolHandlers();
+        UrlSupport.init();
 		String spec = "jar:" + this.rootJarFile.toURI() + "!/nested.jar!/3.dat";
 		URL url = new URL(spec);
 		assertThat(url.toString(), equalTo(spec));
@@ -310,7 +310,7 @@ public class JarFileTests {
 
 	@Test
 	public void createNonNestedUrlFromString() throws Exception {
-        UrlSupport.registerUrlProtocolHandlers();
+        UrlSupport.init();
 		String spec = "jar:" + this.rootJarFile.toURI() + "!/2.dat";
 		URL url = new URL(spec);
 		assertThat(url.toString(), equalTo(spec));

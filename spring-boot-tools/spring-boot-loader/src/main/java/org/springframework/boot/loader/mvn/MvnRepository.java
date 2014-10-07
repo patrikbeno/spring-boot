@@ -15,35 +15,51 @@
  */
 package org.springframework.boot.loader.mvn;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 
 /**
  * @author Patrik Beno
  */
-class MvnRepositoryCredentials {
+class MvnRepository {
 
+    private String id;
 	private URL url;
-	private String userinfo; // encrypted username:password
+
+    // encrypted username:password
+	private String userinfo;
+
+    // decrypted
 	private String username;
 	private String password;
 
-	MvnRepositoryCredentials(URL url, String userinfo) {
+	MvnRepository(String id, URL url, String userinfo) {
+        this.id = id;
 		this.url = url;
 		this.userinfo = userinfo;
 	}
 
-	MvnRepositoryCredentials(URL url, String username, String password) {
-		this.url = url;
-		this.username = username;
-		this.password = password;
-	}
+	MvnRepository(String id, URL url, String username, String password) {
+        this.id = id;
+        this.url = url;
+        this.username = username;
+        this.password = password;
+    }
 
-	URL getURL() {
+    public String getId() {
+        return id;
+    }
+
+    URL getURL() {
 		return url;
 	}
 
 	String getUserinfo() {
-		return userinfo;
+		if (userinfo == null) {
+            String s = String.format("%s:%s", username, password);
+            userinfo = MvnLauncherCredentialStore.instance().encrypt(s);
+        }
+        return userinfo;
 	}
 
 	String getUserName() {

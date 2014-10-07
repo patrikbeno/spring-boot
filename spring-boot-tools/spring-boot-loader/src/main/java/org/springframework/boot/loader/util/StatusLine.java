@@ -61,9 +61,7 @@ public class StatusLine {
 
     static public void resetLine() {
         if (MvnLauncherCfg.statusLine.asBoolean()) {
-            System.out.printf("\r%200s\r", "");
-            System.out.flush();
-            System.err.print("\r");
+            System.err.print("\033[2K\r");
             System.err.flush();
         }
     }

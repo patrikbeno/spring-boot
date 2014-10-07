@@ -181,7 +181,7 @@ public abstract class MvnLauncherBase extends ExecutableArchiveLauncher {
 	 * class name from its manifest.
 	 */
 	protected List<MvnArtifact> getArtifacts(MvnRepositoryConnector connector, MvnArtifact ma) throws Exception {
-        Log.debug("## Resolving main artifact");
+        Log.debug("Resolving main artifact");
 		StatusLine.push("Resolving %s", ma);
         try {
             File f = connector.resolve(ma);

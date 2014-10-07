@@ -43,9 +43,7 @@ import org.w3c.dom.Document;
  */
 public class MvnRepositoryConnector {
 
-	URL repository = MvnLauncherCfg.repositoryUrl.asURL(true);
-
-	MvnRepositoryCredentials credentials;
+	MvnRepository repository = resolveRepository();
 
 	File cache = MvnLauncherCfg.cache.asFile();
 
@@ -62,69 +60,66 @@ public class MvnRepositoryConnector {
 
 	boolean connectionVerified = MvnLauncherCfg.offline.asBoolean();
 
-	/**
+
+    /**
 	 * If the connection to repository seems invalid, throw an exception
 	 */
 	void verifyConnection() {
 		if (connectionVerified) { return; }
 
-        MvnLauncherCredentialStore.instance();
-
-        boolean supportsAuthenticatedConnection = repository.getProtocol().matches("https?");
-
-		boolean userDefinedCredentials
-                = MvnLauncherCfg.repositoryUsername.isDefined()
-                && MvnLauncherCfg.repositoryPassword.isDefined()
-                && !MvnLauncherCfg.repositoryPassword.asString().isEmpty();
-
-        boolean saveCredentials = MvnLauncherCfg.saveCredentials.asBoolean()
-                && supportsAuthenticatedConnection
-                && userDefinedCredentials;
-
-        if (userDefinedCredentials) {
-            credentials = new MvnRepositoryCredentials(
-                    repository,
-                    MvnLauncherCfg.repositoryUsername.asString(),
-                    MvnLauncherCfg.repositoryPassword.asString());
-            if (saveCredentials) {
-                MvnLauncherCredentialStore.instance().save(credentials);
-            }
-        }
-
-		if (supportsAuthenticatedConnection && credentials == null) {
-			credentials = MvnLauncherCredentialStore.instance().get(repository);
-		}
-
         // check http:// and https:// repositories: must be able to connect successfully
-        if (repository.getProtocol().matches("https?")) {
+        if (repository.getURL().getProtocol().matches("https?")) {
             try {
-                URLConnection con = urlcon(repository, false);
+                URLConnection con = urlcon(repository.getURL(), false);
                 con.setConnectTimeout(1000);
                 con.connect();
                 connectionVerified = true;
             }
             catch (IOException e) {
-                throw new MvnLauncherException(e, "Invalid or misconfigured repository " + repository);
+                throw new MvnLauncherException(e, "Invalid or misconfigured repository " + url);
             }
 
             // verify file:// repositories: directory must exist
         }
-        else if (repository.getProtocol().equals("file")) {
-            File f = new File(repository.getPath());
+        else if (repository.getURL().getProtocol().equals("file")) {
+            File f = new File(repository.getURL().getPath());
             connectionVerified = f.exists();
             if (!f.exists()) {
-                throw new MvnLauncherException("Invalid repository: " + repository);
+                throw new MvnLauncherException("Invalid repository: " + MvnLauncherCfg.url.asString());
             }
 
             // unknown / unrecognized protocol
         }
         else {
-            Log.debug("Cannot verify protocol %s://. Good luck!", repository.getProtocol());
+            Log.debug("Cannot verify protocol %s://. Good luck!", repository.getURL().getProtocol());
             connectionVerified = true;
         }
     }
 
-	/**
+    private MvnRepository resolveRepository() {
+
+        MvnRepository repository = null;
+
+        boolean useDefinedCredentials = MvnLauncherCfg.username.isDefined() && MvnLauncherCfg.password.isDefined();
+
+        if (MvnLauncherCfg.url.isDefined()) {
+            repository = new MvnRepository(
+                    MvnLauncherCfg.repository.isDefined() ? MvnLauncherCfg.repository.asString() : "<undefined>",
+                    MvnLauncherCfg.url.asURL(true),
+                    useDefinedCredentials ? MvnLauncherCfg.username.asString() : null,
+                    useDefinedCredentials ? MvnLauncherCfg.password.asString() : null
+            );
+        }
+        if (MvnLauncherCfg.repository.isDefined()) {
+            repository = MvnLauncherCredentialStore.instance().get(MvnLauncherCfg.repository.asString());
+        }
+        if (repository == null) {
+            repository = new MvnRepository("<default>", MvnLauncherCfg.url.asURL(true), null);
+        }
+        return repository;
+    }
+
+    /**
 	 * Close & release executor
 	 */
 	public void close() {
@@ -149,7 +144,7 @@ public class MvnRepositoryConnector {
 		List<MvnArtifact> sorted = new ArrayList<MvnArtifact>(artifacts);
 		Collections.sort(sorted, MvnArtifact.COMPARATOR);
 
-		Log.debug("## Dependencies (alphabetical):");
+		Log.debug("Dependencies (alphabetical):");
 
 		int size = 0;
 		int downloaded = 0;
@@ -187,7 +182,7 @@ public class MvnRepositoryConnector {
 		if (!quiet.asBoolean()) {
 			long elapsed = System.currentTimeMillis() - started;
 			Log.info(String.format(
-                    "## Summary: %d archives, %d KB total (resolved in %d msec, downloaded: %s KB). Warnings/Errors: %d/%d.",
+                    "Summary: %d archives, %d KB total (resolved in %d msec, downloaded: %s KB). Warnings/Errors: %d/%d.",
                     artifacts.size(), size / 1024, elapsed, downloaded / 1024,
                     warnings, errors));
 		}
@@ -226,9 +221,9 @@ public class MvnRepositoryConnector {
 		}
 
 		// if the source is file://, there's no point caching it (unless forced)
-		if (repository.getProtocol().equals("file") && !cacheFileProtocol.asBoolean()) {
+		if (repository.getURL().getProtocol().equals("file") && !cacheFileProtocol.asBoolean()) {
 			try {
-				URL url = new URL(repository, artifact.getPath());
+				URL url = new URL(repository.getURL(), artifact.getPath());
 				return resource(artifact, MvnArtifact.Status.Cached, url, new File(url.getPath()), null);
 			}
 			catch (MalformedURLException e) {
@@ -248,7 +243,7 @@ public class MvnRepositoryConnector {
 				return resource(
                         artifact,
                         f.exists() ? MvnArtifact.Status.Offline : MvnArtifact.Status.NotFound,
-                        repository, f,
+                        repository.getURL(), f,
                         f.exists() ? null : new FileNotFoundException(f.getAbsolutePath()));
 			}
 
@@ -260,13 +255,13 @@ public class MvnRepositoryConnector {
 
 			// file is in cache already and update is disabled
 			if (f.exists() && !update && !nocache) {
-				return resource(artifact, MvnArtifact.Status.Cached, repository, f, null);
+				return resource(artifact, MvnArtifact.Status.Cached, repository.getURL(), f, null);
 			}
 
 			// ok, we're going remote...
 
 			// source URL
-			final URL url = new URL(repository, artifact.getPath());
+			final URL url = new URL(repository.getURL(), artifact.getPath());
 			URLConnection con = urlcon(url);
 			final long lastModified = con.getLastModified();
 
@@ -303,7 +298,7 @@ public class MvnRepositoryConnector {
 			}
 			catch (FileNotFoundException e) {
 				// nope
-				return resource(artifact, MvnArtifact.Status.NotFound, repository, f, e);
+				return resource(artifact, MvnArtifact.Status.NotFound, repository.getURL(), f, e);
 			}
 
 		}
@@ -439,7 +434,7 @@ public class MvnRepositoryConnector {
 			throw new AssertionError(status);
 		}
 
-		Log.debug("%-15s: %s (%s KB)",
+		Log.debug("- %-15s: %s (%s KB)",
                 artifact.getStatus(), artifact,
 				artifact.getFile() != null && artifact.getFile().exists() ? artifact.getFile().length() / 1024 : "?");
 
@@ -453,7 +448,7 @@ public class MvnRepositoryConnector {
 		StatusLine.push("Resolving snapshot version");
         try {
 			// metadata: remote URL and cached local file
-			URL url = new URL(repository, artifact.getPath());
+			URL url = new URL(repository.getURL(), artifact.getPath());
 			URL murl = new URL(url, "maven-metadata.xml");
 			File mfile = new File(new File(cache, artifact.getPath()).getParentFile(), "maven-metadata.xml");
 			File fLastUpdated = getLastUpdatedMarkerFile(mfile);
@@ -632,8 +627,8 @@ public class MvnRepositoryConnector {
 		try {
 			URLConnection con = url.openConnection();
             // credentials are lazily initialized in #verifyConnection()
-			if (credentials != null && credentials.hasPassword()) {
-				String auth = String.format("%s:%s", credentials.getUserName(), credentials.getPassword());
+			if (repository != null && repository.hasPassword()) {
+				String auth = String.format("%s:%s", repository.getUserName(), repository.getPassword());
                 con.setRequestProperty(
                         "Authorization", String.format(
                                 "Basic %s", DatatypeConverter.printBase64Binary(auth.getBytes("UTF-8"))));

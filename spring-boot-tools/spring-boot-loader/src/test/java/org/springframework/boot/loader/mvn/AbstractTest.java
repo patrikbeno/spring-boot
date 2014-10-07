@@ -8,7 +8,7 @@ import org.springframework.boot.loader.util.UrlSupport;
  */
 public abstract class AbstractTest {
 	static {
-		UrlSupport.registerUrlProtocolHandlers();
+		UrlSupport.init();
 		System.setProperty("MvnLauncher.defaults", "classpath:MvnLauncherCfg.properties");
 		MvnLauncherCfg.configure();
 	}
