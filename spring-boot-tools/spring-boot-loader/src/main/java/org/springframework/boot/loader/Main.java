@@ -51,6 +51,8 @@ public class Main {
 
         args = processArguments(args);
 
+        MvnLauncherCfg.configure();
+
         if (MvnLauncherCfg.save.asBoolean()) {
             saveCredentials();
         }

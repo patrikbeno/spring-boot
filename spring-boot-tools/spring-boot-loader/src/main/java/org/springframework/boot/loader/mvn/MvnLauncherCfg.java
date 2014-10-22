@@ -224,10 +224,6 @@ public enum MvnLauncherCfg {
 
 	;
 
-	static {
-		configure();
-	}
-
 	private String dflt;
 
 	MvnLauncherCfg() {
@@ -312,14 +308,14 @@ public enum MvnLauncherCfg {
 	// /
 
 	static public void configure() {
-        Log.debug("## Configuring SpringBoot MvnLauncher %s ##", Launcher.class.getPackage().getImplementationVersion());
+        Log.debug("Configuring SpringBoot MvnLauncher %s", Launcher.class.getPackage().getImplementationVersion());
 
 		Properties props = properties(MvnLauncherCfg.defaults.get().split(","));
 
 		// propagate all yet undefined foreign properties from loaded resources into
 		// system properties
 		// foreign == not MvnLauncher.*
-		String header = "## Setting system properties defined in defaults:";
+		String header = "Setting system properties defined in defaults:";
 		for (String pname : props.stringPropertyNames()) {
 			if (pname.startsWith("MvnLauncher.")) {
 				continue;
@@ -333,12 +329,12 @@ public enum MvnLauncherCfg {
 					Log.debug(header);
 					header = null;
 				}
-				Log.debug("%-30s : %s", pname, value);
+				Log.debug("- %-30s : %s", pname, value);
 			}
 
 		}
 
-		header = "## MvnLauncher configuration:";
+		header = "MvnLauncher configuration:";
 		for (MvnLauncherCfg v : values()) {
 			// override built-in default with value from resources
 			v.dflt = props.getProperty(v.getPropertyName(), v.dflt);
@@ -350,7 +346,7 @@ public enum MvnLauncherCfg {
 				}
 				String key = v.getPropertyName();
 				String value = (key.matches("(?i).*password.*")) ? "***" : v.asString(); // masking password; QDH solution
-				Log.debug("%-30s : %s", key, value);
+				Log.debug("- %-30s : %s", key, value);
 			}
 		}
 
@@ -363,9 +359,8 @@ public enum MvnLauncherCfg {
         }
     }
 
-    static private boolean isDebugEnabled() {
-		return (debug != null && debug.asBoolean())
-				|| (debug == null && Boolean.getBoolean("MvnLauncher.debug"));
+    static public boolean isDebugEnabled() {
+		return (debug != null && debug.asBoolean()) || (debug == null && Boolean.getBoolean("MvnLauncher.debug"));
 	}
 
 	static private String list(String... properties) {
