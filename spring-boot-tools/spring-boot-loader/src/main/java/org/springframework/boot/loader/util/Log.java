@@ -9,16 +9,16 @@ import java.io.PrintStream;
  */
 public class Log {
 
-    static private final String LABEL = "[SpringBoot]";
-    static private final String L_ERR = "[Spring ERR]";
-    static private final String L_WRN = "[Spring WRN]";
+    static private final String LABEL = "[boot]";
+    static private final String L_ERR = "[boot ERR]";
+    static private final String L_WRN = "[boot WRN]";
 
     static public boolean isDebug() {
-        return MvnLauncherCfg.debug.asBoolean();
+        return MvnLauncherCfg.isDebugEnabled();
     }
 
 	static public void debug(String message, Object... args) {
-		if (MvnLauncherCfg.debug.asBoolean()) {
+		if (isDebug()) {
             log(System.out, LABEL, message, args);
         }
 	}
@@ -40,7 +40,7 @@ public class Log {
         for (Throwable t = thrown ; t != null; t = t.getCause()) {
             log(System.err, "", "Caused by: %s", t);
         }
-        if (MvnLauncherCfg.debug.asBoolean()) {
+        if (thrown != null && MvnLauncherCfg.debug.asBoolean()) {
             thrown.printStackTrace(System.err);
         }
 	}
