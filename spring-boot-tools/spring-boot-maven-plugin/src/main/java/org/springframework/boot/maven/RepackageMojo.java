@@ -195,7 +195,7 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 		List<MvnArtifact> mvnuris = new ArrayList<MvnArtifact>();
 
 		Set<String> scopes = StringUtils.commaDelimitedListToSet("compile,runtime,provided");
-		for (Dependency d : project.getDependencies()) {
+		for (Artifact d : project.getArtifacts()) {
 			if (!scopes.contains(d.getScope())) { continue; }
 			MvnArtifact mvnuri = MvnArtifact.create(
 					d.getGroupId(), d.getArtifactId(), d.getVersion(), d.getType(), d.getClassifier());
