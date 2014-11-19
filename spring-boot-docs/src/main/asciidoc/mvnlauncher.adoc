@@ -230,6 +230,123 @@ Runnable r = (Runnable) cls.newInstance();
 r.run();
 ----
 
+## Vault: Secure Data Store
+
+SpringBoot Vault is a secure data store based on asymmetric encryption.
+
+The vault format supports both encrypted and unencrypted values. It also supports referencing encrypted data from unencrypted context. Encrypted values are wrapped in `{encrypted:<hexadecimal-string>}` envelope.
+
+If you need to reference encrypted value from other value (encrypted or not), use following reference:
+
+`...free style content {secure:encrypted.property.name} free style content...`
+
+### Security
+
+Overall Security of this solution is determined by the
+
+ - level of protection of the generated user private key
+ - strength and reliability of the encryption mechanism
+
+General use case is as follows:
+
+ - generate key pair using `--MvnLauncher.initValue=true`
+ - protect the private key (move away)
+ - use `--MvnLauncher.repository=<id> --MvnLauncher.user=<userid> --MvnLauncher.password=<pass> --MvnLauncher.save=true` to save the credentials for a given repository
+  - or use the code `Vault.instance().setProperty(key, value)` followed by `Vault.instance().save()` to write protected information into the vault.
+
+When reading protected information, private key must be in place and readable by the process. Use `Vault.instance().resolve(string)` call to read encrypted values where `string` can contain embedded references to encrypted values using `{secure:encrypted.property.name}` syntax.
+
+### Configuration
+
+springboot.vault.useSystemVault::
+    Use system vault instead of user one. This only makes
+    Since the user and system vaults are
+springboot.vault.algorithm::
+	Encryption algorithm. +
+	Default: `RSA`
+springboot.vault.keysize::
+	Encryption key size. Relevant only when generating the key. +
+	Default: `2048`
+springboot.vault.fileName::
+	Base name of the vault file (without extension). +
+	Default: `vault`.
+springboot.vault.fileExtPrivate::
+	Private key file extension. +
+	Default: `*.key`
+springboot.vault.fileExtPublic::
+	Public key file extension. +
+	Default: `*.pub`
+springboot.vault.fileExtData::
+	Data file extension. +
+	Default: `*.properties`
+springboot.vault.systemPath::
+    Path to system vault folder. +
+    Defaults: `/etc/springboot`
+springboot.vault.userPath::
+	Path to user vault folder. +
+	Default: `${user.home}/.springboot`
+springboot.vault.systemKeyPrivate::
+	System private key file.
+	Default: `$systemPath/$fileName.$fileExtPrivate`
+springboot.vault.systemKeyPublic::
+	System public key file. +
+	Default: `$systemPath/$fileName.$fileExtPublic`
+springboot.vault.systemKeyData::
+	System data file. +
+	Default: `$systemPath/$fileName.$fileExtData`
+springboot.vault.userKeyPrivate::
+	User private key file. +
+	Default: `$userPath/$fileName.$fileExtPrivate`
+springboot.vault.userKeyPublic::
+	User public key file. +
+	Default: `$userPath/$fileName.$fileExtPublic`
+springboot.vault.userKeyData::
+	User data file. +
+	Default: `$userPath/$fileName/$fileExtData`
+
+### File Format
+
+Original intention to save keys in PEM format has been rejected because the default JRE does not support this format and it si not trivial enough to implement it within the limitations of the bootstrap code.
+
+Native Java format is no standard either so is has been rejected as well.
+
+At the end of the day, `java.util.Properties` has been chosen as container, and simple binary-to-hexadecimal conversion was used to encode the binary data. This way, resulting format is still just plain text, with human readable portions and metadata.
+
+#### Example
+
+```
+#SpringBoot Vault Private Key
+#Wed Nov 19 00:30:04 CET 2014
+algorithm=RSA
+type=private
+data=308204...4fd057
+format=PKCS\#8
+```
+
+```
+#SpringBoot Vault Public Key
+#Wed Nov 19 00:30:04 CET 2014
+algorithm=RSA
+type=public
+data=308201...010001
+format=X.509
+```
+
+```
+#SpringBoot Vault Data
+#Wed Nov 19 00:30:04 CET 2014
+test={encrypted\:46ab23...514af0}
+```
+
+
+#### Data Encoding
+
+Keys (both private and public) are stored in Java native format converted to textual hexadecimal representation.
+
+No standard file format is used for key storage because
+
+Values are encrypted using public key and encoded hexadecimal.
+
 ## Credentials Encryption
 
 To avoid plain-text passwords in configuration, repository credentials are encrypted using the deployment-specific, on-demand, auto-generated encryption key (`MvnLauncher.credentialsKey`), saved in a local, user-specific, per-URL credential store (`MvnLauncher.credentials`, `MvnLauncher.saveCredentials`), and later automatically retrieved, decrypted and used.

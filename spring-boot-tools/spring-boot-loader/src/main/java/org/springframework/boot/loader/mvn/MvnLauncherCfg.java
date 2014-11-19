@@ -22,6 +22,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -31,6 +33,7 @@ import java.util.regex.Pattern;
 import org.springframework.boot.loader.Launcher;
 import org.springframework.boot.loader.util.Log;
 import org.springframework.boot.loader.util.StatusLine;
+import org.springframework.boot.loader.util.SystemPropertyUtils;
 
 /**
  * MvnLauncher bootstrap configuration (loaded from external properties file or system
@@ -203,17 +206,19 @@ public enum MvnLauncherCfg {
 	 */
 	password,
 
-	keyfile("${user.home}/.springboot/credentials.key"),
-
-	credentials("${user.home}/.springboot/credentials.properties"),
-
     /**
      * Saves used-provided credentials in local user's credentials store
      * @see #credentials
      */
 	save(false),
 
-	/**
+    credentials("${user.home}/.springboot/credentials.properties"),
+
+    useSystemVault(false),
+
+    initVault(false),
+
+    /**
 	 * Maven artifact entrypoint URI in form {@code groupId:artifactId:version}. If
 	 * defined, launcher resolves it and uses its metadata to configure classpath and main
 	 * class. If undefined (default), launcher proceeds as usual, using its own archive to
@@ -297,6 +302,14 @@ public enum MvnLauncherCfg {
 		return url(asString(), directory);
 	}
 
+	public URI asURI(boolean directory) {
+        try {
+            return url(asString(), directory).toURI();
+        } catch (URISyntaxException e) {
+            throw new MvnLauncherException(e);
+        }
+    }
+
 	public File asFile() {
 		return new File(asString());
 	}
@@ -345,7 +358,9 @@ public enum MvnLauncherCfg {
 					header = null;
 				}
 				String key = v.getPropertyName();
-				String value = (key.matches("(?i).*password.*")) ? "***" : v.asString(); // masking password; QDH solution
+				String value = (key.matches("(?i).*password.*"))
+						? "***"
+						: SystemPropertyUtils.resolvePlaceholders(v.asString()); // masking password; QDH solution
 				Log.debug("- %-30s : %s", key, value);
 			}
 		}
