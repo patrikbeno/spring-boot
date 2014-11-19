@@ -101,11 +101,18 @@ public class Layouts {
 	 */
 	static public class Maven extends Jar {
 		@Override
-		public String getLauncherClassName() { return "org.springframework.boot.loader.MvnLauncher"; }
+		public String getLauncherClassName() {
+			return null;
+		}
 
 		@Override
 		public String getLibraryDestination(String libraryName, LibraryScope scope) {
 			return null;
+		}
+
+		@Override
+		public boolean isExecutable() {
+			return false;
 		}
 	}
 
