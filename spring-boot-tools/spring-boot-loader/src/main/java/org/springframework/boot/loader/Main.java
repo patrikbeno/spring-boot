@@ -15,16 +15,18 @@
  */
 package org.springframework.boot.loader;
 
-import org.springframework.boot.loader.mvn.MvnLauncherCfg;
-import org.springframework.boot.loader.mvn.MvnLauncherCredentialStore;
-import org.springframework.boot.loader.util.Log;
-import org.springframework.boot.loader.util.SystemPropertyUtils;
-import org.springframework.boot.loader.util.UrlSupport;
+import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
 
 import java.util.LinkedList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.springframework.boot.loader.mvn.MvnLauncherCfg;
+import org.springframework.boot.loader.mvn.MvnRepository;
+import org.springframework.boot.loader.security.Vault;
+import org.springframework.boot.loader.util.Log;
+import org.springframework.boot.loader.util.UrlSupport;
 
 /**
  * Start class for MvnLauncher; {@code spring-boot-loader} is executable.
@@ -52,6 +54,12 @@ public class Main {
         args = processArguments(args);
 
         MvnLauncherCfg.configure();
+
+		if (MvnLauncherCfg.initVault.asBoolean()) {
+			Log.info("Initializing user vault: %s", resolvePlaceholders(Vault.USER_DATA));
+			Log.warn("Protect the key: %s", resolvePlaceholders(Vault.USER_PRIVATE));
+			Vault.initUserSecureStore();
+		}
 
         if (MvnLauncherCfg.save.asBoolean()) {
             saveCredentials();
@@ -121,14 +129,12 @@ public class Main {
         if (id == null || id.isEmpty()) {
             Log.error(null, "Rejecting to save credentials with empty repository ID (--%s)", MvnLauncherCfg.repository.getPropertyName());
         } else {
-            try {
-                MvnLauncherCredentialStore.save(
-                        MvnLauncherCfg.repository.asString(), MvnLauncherCfg.url.asURL(true),
-                        MvnLauncherCfg.username.asString(), MvnLauncherCfg.password.asString());
-            } catch (Exception e) {
-                Log.error(e, "Cannot save repository credentials");
-                System.exit(-1);
-            }
+			MvnRepository mvnrepo = new MvnRepository(
+					MvnLauncherCfg.repository.asString(),
+					MvnLauncherCfg.url.asURI(true),
+					MvnLauncherCfg.username.asString(),
+					MvnLauncherCfg.password.asString());
+			mvnrepo.save();
         }
     }
 

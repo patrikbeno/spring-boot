@@ -19,6 +19,7 @@ import static org.springframework.boot.loader.mvn.MvnLauncherCfg.*;
 
 import java.io.*;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.AccessDeniedException;
@@ -34,6 +35,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathFactory;
 
+import org.springframework.boot.loader.security.Vault;
 import org.springframework.boot.loader.util.Log;
 import org.springframework.boot.loader.util.StatusLine;
 import org.w3c.dom.Document;
@@ -105,19 +107,21 @@ public class MvnRepositoryConnector {
         if (MvnLauncherCfg.url.isDefined()) {
             repository = new MvnRepository(
                     MvnLauncherCfg.repository.isDefined() ? MvnLauncherCfg.repository.asString() : "<undefined>",
-                    MvnLauncherCfg.url.asURL(true),
+                    MvnLauncherCfg.url.asURI(true),
                     useDefinedCredentials ? MvnLauncherCfg.username.asString() : null,
                     useDefinedCredentials ? MvnLauncherCfg.password.asString() : null
             );
         }
         if (MvnLauncherCfg.repository.isDefined()) {
-            repository = MvnLauncherCredentialStore.instance().get(MvnLauncherCfg.repository.asString());
+			String id = MvnLauncherCfg.repository.asString();
+			repository = MvnRepository.forRepositoryId(id);
         }
-        if (repository == null) {
-            repository = new MvnRepository("<default>", MvnLauncherCfg.url.asURL(true), null);
-        }
+//        if (repository == null) {
+//            repository = new MvnRepository("<default>", MvnLauncherCfg.url.asURI(true), null);
+//        }
         return repository;
     }
+
 
     /**
 	 * Close & release executor

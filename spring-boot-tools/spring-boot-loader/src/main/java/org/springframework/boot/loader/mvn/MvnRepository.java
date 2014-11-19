@@ -15,33 +15,54 @@
  */
 package org.springframework.boot.loader.mvn;
 
+import org.springframework.boot.loader.security.Vault;
+
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 
 /**
+ * Encapsulates Maven repository information. Maven repository is is identified by user-defined ID, and contains
+ * repository URL and credentials: username and password.
+ * This object can save itself into {@code SpringBoot Vault}, using repository ID as key, and storing plain
+ * unencrypted URL value as reference, and user encrypted user credentials related to this repository configuration.
+ * <p>
+ * Values are stored under {@code springboot.mvnlauncher.repository.$repositoryId.(url|credentials)} properties, where
+ * $repositoryId refers to any user-given repository ID, and credentials containing encprypted username:password
+ * tuple.
+ *
  * @author Patrik Beno
  */
-class MvnRepository {
+public class MvnRepository {
+
+    static private final String P_URL           = "springboot.mvnlauncher.repository.%s.url";
+    static private final String P_CREDENTIALS   = "springboot.mvnlauncher.repository.%s.credentials";
+
+    static public MvnRepository forRepositoryId(String repositoryId) {
+
+        Vault vault = Vault.instance();
+
+        String purl = String.format(P_URL, repositoryId);
+        String pcredentials = String.format(P_CREDENTIALS, repositoryId);
+
+        String url = vault.getProperty(purl);
+        String userinfo = vault.getProperty(pcredentials);
+
+        if (userinfo == null) { return null; }
+
+        String[] userpass = userinfo.split(":", 2);
+
+        return new MvnRepository(repositoryId, URI.create(url), userpass[0], userpass[1]);
+    }
 
     private String id;
-	private URL url;
-
-    // encrypted username:password
-	private String userinfo;
-
-    // decrypted
+	private URI uri;
 	private String username;
 	private String password;
 
-	MvnRepository(String id, URL url, String userinfo) {
+	public MvnRepository(String id, URI uri, String username, String password) {
         this.id = id;
-		this.url = url;
-		this.userinfo = userinfo;
-	}
-
-	MvnRepository(String id, URL url, String username, String password) {
-        this.id = id;
-        this.url = url;
+        this.uri = uri;
         this.username = username;
         this.password = password;
     }
@@ -50,41 +71,39 @@ class MvnRepository {
         return id;
     }
 
-    URL getURL() {
-		return url;
+    public URI getURI() {
+		return uri;
 	}
 
-	String getUserinfo() {
-		if (userinfo == null) {
-            String s = String.format("%s:%s", username, password);
-            userinfo = MvnLauncherCredentialStore.instance().encrypt(s);
-        }
-        return userinfo;
-	}
-
-	String getUserName() {
-		if (username == null) {
-			decrypt();
-		}
+	public String getUserName() {
 		return username;
 	}
 
 	String getPassword() {
-		if (password == null) {
-			decrypt();
-		}
 		return password;
-	}
-
-	private void decrypt() {
-		String decrypted = MvnLauncherCredentialStore.instance().decrypt(userinfo);
-		String[] parts = (decrypted != null) ? decrypted.split(":") : null;
-		username = (parts != null && parts.length > 0) ? parts[0] : null;
-		password = (parts != null && parts.length > 1) ? parts[1] : null;
 	}
 
 	boolean hasPassword() {
 		return getUserName() != null && getPassword() != null;
 	}
+
+    public URL getURL() {
+        try {
+            return uri.toURL();
+        } catch (MalformedURLException e) {
+            throw new MvnLauncherException(e);
+        }
+    }
+
+    ///
+
+    public void save() {
+        Vault vault = Vault.instance();
+        String purl = String.format(P_URL, id);
+        String pcredentials = String.format(P_CREDENTIALS, id);
+        vault.setProperty(purl, uri.toASCIIString(), false);
+        vault.setProperty(pcredentials, String.format("%s:%s", username, password), true);
+        vault.save();
+    }
 
 }
