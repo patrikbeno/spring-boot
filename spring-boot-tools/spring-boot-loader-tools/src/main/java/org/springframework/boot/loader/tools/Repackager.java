@@ -240,6 +240,11 @@ public class Repackager {
 			manifest.getMainAttributes().putValue("Manifest-Version", "1.0");
 		}
 		manifest = new Manifest(manifest);
+
+		// determine start class; priority:
+		// 1) plugin config
+		// 2) source manifest's main class
+		// 3) auto-detected main class (fallback)
 		String startClass = this.mainClass;
 		if (startClass == null) {
 			startClass = manifest.getMainAttributes().getValue(MAIN_CLASS_ATTRIBUTE);
@@ -247,17 +252,40 @@ public class Repackager {
 		if (startClass == null) {
 			startClass = findMainMethod(source);
 		}
-		String launcherClassName = (this.launcherClass != null) ? this.launcherClass : this.layout.getLauncherClassName();
-		if (launcherClassName != null) {
-			manifest.getMainAttributes()
-					.putValue(MAIN_CLASS_ATTRIBUTE, launcherClassName);
-			if (startClass == null) {
-				throw new IllegalStateException("Unable to find main class");
-			}
-			manifest.getMainAttributes().putValue(START_CLASS_ATTRIBUTE, startClass);
+
+		String launcherClassName = null;
+		if (layout.isExecutable()) {
+			// priority for launcher class:
+			// 1) plugin config override,
+			// 2) layout default,
+			// 3) start class as determined above (fallback)
+			launcherClassName
+					= (launcherClass != null) ? launcherClass
+					: (layout.getLauncherClassName() != null) ? layout.getLauncherClassName()
+					: startClass;
 		}
-		else if (startClass != null) {
-			manifest.getMainAttributes().putValue(MAIN_CLASS_ATTRIBUTE, startClass);
+
+		// executable layouts must have both launcher and start class
+		// non-executable need must have a start class
+		boolean isValid = layout.isExecutable()
+				? (launcherClassName != null && startClass != null)
+				: (startClass != null);
+		if (!isValid) {
+			throw new IllegalStateException("Unable to find main class");
+		}
+
+		// open issues:
+		// 1) main class from source manifest is ignored for non-executable layouts (why would one use such layout
+		//    with his own launcher?) Such Main-Class propagates into Start-Class
+		// 2) cannot have non-executable layout without Start-Class (which might be useful in some
+		//    scenarios like plugins where entry point is framework-specific but plugin classpath relies on
+		//    layout-provided metadata like MvnLauncher's Spring-Boot-Dependencies attribute)
+
+		if (launcherClassName != null) {
+			manifest.getMainAttributes().putValue(MAIN_CLASS_ATTRIBUTE, launcherClassName);
+		}
+		if (startClass != null) {
+			manifest.getMainAttributes().putValue(START_CLASS_ATTRIBUTE, startClass);
 		}
 		String bootVersion = getClass().getPackage().getImplementationVersion();
 		manifest.getMainAttributes().putValue(BOOT_VERSION_ATTRIBUTE, bootVersion);
