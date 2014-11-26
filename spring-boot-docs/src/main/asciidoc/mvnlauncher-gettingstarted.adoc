@@ -1,10 +1,30 @@
 # SpringBoot MvnLauncher: Getting Started #
 
-## Creating First SpringBoot MvnLauncher Enabled Artifact
+## Getting the Launcher
 
-## Deploying to Repository
+1. Download the latest binary from https://github.com/patrikbeno/spring-boot/tree/MvnLauncherDist
+2. Download the sources and build it yourself: https://github.com/patrikbeno/spring-boot/tree/MvnLauncher
+3. Download official binary from http://projects.spring.io/spring-boot/ (once the code is accepted)
+
+## Building the Sources
+
+``` bash
+$ git clone https://github.com/patrikbeno/spring-boot.git
+$ cd spring-boot
+$ mvn -DskipTests clean install \
+    -pl spring-boot-tools/spring-boot-maven-plugin \
+    -pl spring-boot-tools/spring-boot-gradle-plugin \
+    -pl spring-boot-tools/spring-boot-loader \
+    -am
+$ mkdir /opt/springboot
+$ cp spring-boot-tools/spring-boot-loader/spring-boot-loader-*jar /opt/springboot/
+```
 
 ## Running the Launcher
+
+
+
+
 
 
 
