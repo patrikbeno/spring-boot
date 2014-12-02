@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.boot.loader.mvn;
+package org.springframework.boot.launcher.mvn;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,7 +30,7 @@ import org.springframework.boot.loader.archive.JarFileArchive;
 /**
  * @author Patrik Beno
  */
-public class MvnArtifact {
+public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArtifact {
 
 	// compares artifacts by group:artifact:version:packaging:classifier
 	static public Comparator<MvnArtifact> COMPARATOR = new Comparator<MvnArtifact>() {
@@ -47,18 +47,9 @@ public class MvnArtifact {
 		NotModified, Downloaded, Updated, Cached, Offline, NotFound, Invalid
 	}
 
-	private String groupId;
-
-	private String artifactId;
-
-	private String version;
-
-	private String classifier;
-
-	private String packaging;
 
 	private String resolvedSnapshotVersion; // e.g. 1.0-SNAPSHOT (logical) ->
-											// 1.0.20140131.123456 (timestamped)
+	// 1.0.20140131.123456 (timestamped)
 
 	private Status status; // resolution status
 
@@ -68,72 +59,14 @@ public class MvnArtifact {
 
 	private Throwable error; // resolver error, if any (for reporting purposes)
 
-	static public MvnArtifact create(String groupId, String artifactId, String version, String type, String classifier) {
-		MvnArtifact mvnuri = new MvnArtifact();
-		mvnuri.groupId = groupId;
-		mvnuri.artifactId = artifactId;
-		mvnuri.version = version;
-		mvnuri.packaging = type;
-		mvnuri.classifier = classifier;
-        mvnuri.fixupExplicitSnapshotVersion();
-		return mvnuri;
+
+	protected MvnArtifact(String groupId, String artifactId, String version, String type, String classifier) {
+		super(groupId, artifactId, version, type, classifier);
+		fixupExplicitSnapshotVersion();
 	}
 
-	/**
-	 * Parses given Maven artifact URI. URI syntax is {@code groupId}
-	 * :{artifactId}:{version}[:{packaging}[:{classifier}]]}. Packaging can be omitted,
-	 * and in such case it defaults to "jar".
-	 * <p>
-	 * (Usually only group:artifact:version need to be specified.)
-	 * @param uri
-	 * @return
-	 */
-	static public MvnArtifact parse(String uri) {
-
-		String[] parts = uri.split(":");
-
-		if (parts.length < 3 || parts.length > 5) {
-			throw new MvnLauncherException(
-					"Invalid Maven URI. Expected {groupId}:{artifactId}:{version}[:{packaging}[:{classifier}]]. "
-                    + "Found: " + uri);
-		}
-
-		MvnArtifact mvnuri = new MvnArtifact();
-
-		// first 3 parts are mandatory
-		mvnuri.groupId = parts[0];
-		mvnuri.artifactId = parts[1];
-		mvnuri.version = parts[2];
-		// optional, defaults to "jar"
-		mvnuri.packaging = (parts.length > 3) ? parts[3] : "jar";
-		// optional, defaults to null
-		mvnuri.classifier = (parts.length > 4) ? parts[4] : null;
-        mvnuri.fixupExplicitSnapshotVersion();
-
-		return mvnuri;
-	}
-
-	protected MvnArtifact() {
-	}
-
-	public String getGroupId() {
-		return groupId;
-	}
-
-	public String getArtifactId() {
-		return artifactId;
-	}
-
-	public String getVersion() {
-		return version;
-	}
-
-	public String getClassifier() {
-		return classifier;
-	}
-
-	public String getPackaging() {
-		return packaging;
+	public MvnArtifact(String uri) {
+		super(uri);
 	}
 
 	public String getResolvedSnapshotVersion() {
@@ -185,7 +118,7 @@ public class MvnArtifact {
 			return new JarFileArchive(file);
 		}
 		catch (IOException e) {
-			throw new MvnLauncherException(e, "Cannot create archive for " + file);
+			throw new RuntimeException("Cannot create archive for " + file, e);
 		}
 	}
 
@@ -200,7 +133,7 @@ public class MvnArtifact {
 	}
 
 	public boolean isSnapshot() {
-		return version.endsWith("-SNAPSHOT");
+		return getVersion().endsWith("-SNAPSHOT");
 	}
 
 	public boolean isRelease() {
@@ -209,11 +142,11 @@ public class MvnArtifact {
 
     private void fixupExplicitSnapshotVersion() {
         Pattern pattern = Pattern.compile("(.*)-\\p{Digit}{8}\\.\\p{Digit}{6}-\\p{Digit}+");
-        Matcher m = pattern.matcher(version);
+        Matcher m = pattern.matcher(getVersion());
         if (m.matches()) {
-            resolvedSnapshotVersion = version;
-            version = m.replaceFirst("$1-SNAPSHOT");
-        }
+            resolvedSnapshotVersion = getVersion();
+			setVersion(m.replaceFirst("$1-SNAPSHOT"));
+		}
     }
 
 	// /
@@ -233,10 +166,10 @@ public class MvnArtifact {
 	}
 
 	public String asString() {
-		String resolvedVersion = Objects.toString(resolvedSnapshotVersion, version);
-		return (classifier != null) ? String.format("%s:%s:%s:%s:%s", groupId,
-				artifactId, resolvedVersion, packaging, classifier) : String.format(
-				"%s:%s:%s:%s", groupId, artifactId, resolvedVersion, packaging);
+		String resolvedVersion = Objects.toString(resolvedSnapshotVersion, getVersion());
+		return (getClassifier() != null) ? String.format("%s:%s:%s:%s:%s", getGroupId(),
+				getArtifactId(), resolvedVersion, getPackaging(), getClassifier()) : String.format(
+				"%s:%s:%s:%s", getGroupId(), getArtifactId(), resolvedVersion, getPackaging());
 	}
 
 	/**
@@ -245,12 +178,12 @@ public class MvnArtifact {
 	 */
 	public String getPath() {
 		String sversion = (resolvedSnapshotVersion != null && !resolvedSnapshotVersion
-				.isEmpty()) ? resolvedSnapshotVersion : version;
-		String path = (classifier != null) ? String.format(
-				"%1$s/%2$s/%3$s/%2$s-%4$s-%5$s.%6$s", groupId.replace('.', '/'),
-				artifactId, version, sversion, classifier, packaging) : String.format(
-				"%1$s/%2$s/%3$s/%2$s-%4$s.%5$s", groupId.replace('.', '/'), artifactId,
-				version, sversion, packaging);
+				.isEmpty()) ? resolvedSnapshotVersion : getVersion();
+		String path = (getClassifier() != null) ? String.format(
+				"%1$s/%2$s/%3$s/%2$s-%4$s-%5$s.%6$s", getGroupId().replace('.', '/'),
+				getArtifactId(), getVersion(), sversion, getClassifier(), getPackaging()) : String.format(
+				"%1$s/%2$s/%3$s/%2$s-%4$s.%5$s", getGroupId().replace('.', '/'), getArtifactId(),
+				getVersion(), sversion, getPackaging());
 		return path;
 
 	}

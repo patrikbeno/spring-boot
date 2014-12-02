@@ -36,7 +36,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
-import org.springframework.boot.loader.mvn.MvnArtifact;
+import org.springframework.boot.loader.archive.MvnArtifact;
 import org.springframework.boot.loader.tools.Layout;
 import org.springframework.boot.loader.tools.Layouts;
 import org.springframework.boot.loader.tools.Libraries;
@@ -197,7 +197,7 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 		Set<String> scopes = StringUtils.commaDelimitedListToSet("compile,runtime,provided");
 		for (Artifact d : project.getArtifacts()) {
 			if (!scopes.contains(d.getScope())) { continue; }
-			MvnArtifact mvnuri = MvnArtifact.create(
+			MvnArtifact mvnuri = new MvnArtifact(
 					d.getGroupId(), d.getArtifactId(), d.getVersion(), d.getType(), d.getClassifier());
 			if (!index.contains(mvnuri)) {
 				mvnuris.add(mvnuri);

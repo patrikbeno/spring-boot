@@ -13,15 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.boot.loader.security;
+package org.springframework.boot.launcher.vault;
 
-import static org.springframework.boot.loader.security.VaultPermission.READ_PERMISSION;
-import static org.springframework.boot.loader.security.VaultPermission.WRITE_PERMISSION;
 import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
 
 import java.io.BufferedInputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -36,10 +32,8 @@ import java.security.Key;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
-import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
@@ -49,8 +43,8 @@ import java.util.regex.Pattern;
 
 import javax.crypto.Cipher;
 
-import org.springframework.boot.loader.mvn.MvnLauncherCfg;
-import org.springframework.boot.loader.util.Log;
+import org.springframework.boot.launcher.util.Log;
+import org.springframework.boot.launcher.MvnLauncherCfg;
 import org.springframework.boot.loader.util.SystemPropertyUtils;
 
 /**
@@ -110,7 +104,7 @@ public class Vault {
     }
 
 	static public Vault vault() {
-        READ_PERMISSION.check();
+        VaultPermission.READ_PERMISSION.check();
 
         Vault store = INSTANCE != null ? INSTANCE.get() : null;
 		if (store == null) {
@@ -130,7 +124,7 @@ public class Vault {
     }
 
     static public void initVault(final Vault vault) {
-        READ_PERMISSION.check();
+        VaultPermission.WRITE_PERMISSION.check();
         boolean allow = true;
         for (File f : Arrays.asList(vault.privateKeyFile, vault.publicKeyFile, vault.propertiesFile)) {
             allow &= !f.exists();
@@ -139,6 +133,8 @@ public class Vault {
             }
         }
         if (allow) {
+            Log.info("Initializing vault: %s", vault.propertiesFile);
+            Log.warn("Protect the key: %s", vault.privateKeyFile);
             vault.saveKeyPair(vault.generateKeyPair());
             vault.save();
         }
@@ -155,12 +151,16 @@ public class Vault {
         File privateKey = new File(resolvePlaceholders(USER_PRIVATE));
         File publicKey = new File(resolvePlaceholders(USER_PUBLIC));
         File props = new File(resolvePlaceholders(USER_DATA));
-        return new Vault(privateKey, publicKey, props, systemVault());
+        Vault vault = new Vault(privateKey, publicKey, props, systemVault());
+        if (!vault.isReadable()) {
+            initVault(vault);
+        }
+        return vault;
     }
 
     // private key
     private File privateKeyFile;
-    private PrivateKey privatekey;
+    private PrivateKey privateKey;
 
     // public key
     private File publicKeyFile;
@@ -187,21 +187,33 @@ public class Vault {
 
     ///
 
+    public boolean isReadable() {
+        return privateKey != null || (
+                privateKeyFile.exists() && privateKeyFile.canRead()
+                && propertiesFile.exists() && propertiesFile.canRead());
+    }
+
+    public boolean isWritable() {
+        return publicKey != null || (
+                publicKeyFile.exists() && publicKeyFile.canRead()
+                && propertiesFile.exists() && propertiesFile.canWrite());
+    }
+
     public void setProperty(String key, String value) {
         setProperty(key, value, true);
     }
 
     public void setProperty(String key, String value, boolean encrypt) {
-        WRITE_PERMISSION.check();
-        loaded();
+        VaultPermission.WRITE_PERMISSION.check();
+        loadWritable();
         String s = (encrypt) ? encrypt(value) : value;
         properties.setProperty(key, s);
         save();
     }
 
     public String getProperty(String key) {
-        READ_PERMISSION.check();
-        loaded();
+        VaultPermission.READ_PERMISSION.check();
+        loadReadable();
         String value = decrypt(properties.getProperty(key));
         if (value == null && parent != null) {
             value = parent.getProperty(key);
@@ -210,8 +222,8 @@ public class Vault {
     }
 
     public boolean containsKey(String key) {
-        READ_PERMISSION.check();
-        loaded();
+        VaultPermission.READ_PERMISSION.check();
+        loadReadable();
         return properties.getProperty(key) != null || parent.containsKey(key);
     }
 
@@ -235,13 +247,23 @@ public class Vault {
 
     ///
 
+    private void loadReadable() {
+        if (properties == null) { properties = loadProperties(); }
+        if (privateKey == null) { privateKey = loadPrivateKey(); }
+    }
+
+    private void loadWritable() {
+        if (properties == null) { properties = loadProperties(); }
+        if (publicKey == null) { publicKey = loadPublicKey(); }
+    }
+
     /**
      *
      * @return
      * @see java.security.spec.PKCS8EncodedKeySpec
      */
     private PrivateKey loadPrivateKey() {
-        READ_PERMISSION.check();
+        VaultPermission.READ_PERMISSION.check();
         if (!privateKeyFile.exists()) {
             return null;
         }
@@ -258,21 +280,6 @@ public class Vault {
             return null;
         }
         return (PublicKey) loadKey(publicKeyFile);
-    }
-
-    /**
-     * Makes sure all keys and data is loaded, if available. Missing key or data files are ignored.
-     */
-    private void loaded() {
-        if (properties == null) {
-            properties = loadProperties();
-        }
-        if (privatekey == null) {
-            privatekey = loadPrivateKey();
-        }
-        if (publicKey == null) {
-            publicKey = loadPublicKey();
-        }
     }
 
     /**
@@ -300,7 +307,7 @@ public class Vault {
     /**
      * Generate new key pair according to specified algorithm and key size.
      * @return
-     * @throws org.springframework.boot.loader.security.VaultException when key generation fails.
+     * @throws VaultException when key generation fails.
      */
     private KeyPair generateKeyPair() {
         try {
@@ -330,7 +337,7 @@ public class Vault {
      * @param data
      */
 	private void saveKey(File file, Key key) throws VaultException {
-        WRITE_PERMISSION.check();
+        VaultPermission.WRITE_PERMISSION.check();
         FileOutputStream out = null;
         try {
             file.getParentFile().mkdirs();
@@ -384,7 +391,7 @@ public class Vault {
      * @see #save()
      */
     private synchronized void saveData() {
-        WRITE_PERMISSION.check();
+        VaultPermission.WRITE_PERMISSION.check();
         OutputStream out = null;
         try {
             propertiesFile.getParentFile().mkdirs();
@@ -409,12 +416,15 @@ public class Vault {
      * @see #decrypt(String)
      */
 	public String encrypt(String value) {
-        WRITE_PERMISSION.check();
+        VaultPermission.WRITE_PERMISSION.check();
 		if (value == null) {
 			return null;
 		}
         if (publicKey == null) {
             publicKey = loadPublicKey();
+        }
+        if (publicKey == null) {
+            throw new VaultException("Missing public key. Have you initialized the vault?");
         }
         try {
 			Cipher cipher = Cipher.getInstance(algorithm);
@@ -442,11 +452,10 @@ public class Vault {
      * @return
      */
     private String decrypt(String value) {
-        READ_PERMISSION.check();
+        VaultPermission.READ_PERMISSION.check();
         if (value == null) {
             return null;
         }
-        loaded();
 
         // unwrap, if needed
         Pattern p = Pattern.compile("\\{encrypted:([^\\}]+)\\}");
@@ -457,14 +466,14 @@ public class Vault {
 
         // yes, encrypted
 
-        if (privatekey == null) {
+        if (privateKey == null) {
             throw new VaultException("No private key. Cannot decrypt value.");
         }
 
         String hexcrypted = m.group(1);
         try {
             Cipher cipher = Cipher.getInstance(algorithm);
-            cipher.init(Cipher.DECRYPT_MODE, privatekey);
+            cipher.init(Cipher.DECRYPT_MODE, privateKey);
             byte[] encrypted = fromHexString(hexcrypted);
             byte[] decrypted = cipher.doFinal(encrypted);
             return new String(decrypted, UTF8);

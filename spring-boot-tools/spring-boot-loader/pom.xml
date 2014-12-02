@@ -38,25 +38,6 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
-	<build>
-		<plugins>
-			<plugin>
-				<artifactId>maven-jar-plugin</artifactId>
-				<configuration>
-					<archive>
-						<manifestEntries>
-							<!-- this hand-crafted manifest configuration is here for generic MvnLauncher,
-							     and enables launcher to execute itself -->
-							<Spring-Boot-Version>${project.version}</Spring-Boot-Version>
-							<Main-Class>org.springframework.boot.loader.Main</Main-Class>
-							<Start-Class>org.springframework.boot.loader.Main</Start-Class>
-							<Spring-Boot-Dependencies/>
-						</manifestEntries>
-					</archive>
-				</configuration>
-			</plugin>
-		</plugins>
-	</build>
 	<profiles>
 		<profile>
 			<id>integration</id>

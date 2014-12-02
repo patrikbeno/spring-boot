@@ -1,6 +1,6 @@
-package org.springframework.boot.loader.util;
+package org.springframework.boot.launcher.util;
 
-import org.springframework.boot.loader.mvn.MvnLauncherCfg;
+import org.springframework.boot.launcher.MvnLauncherCfg;
 
 import java.io.PrintStream;
 
@@ -10,8 +10,8 @@ import java.io.PrintStream;
 public class Log {
 
     static private final String LABEL = "[boot]";
-    static private final String L_ERR = "[boot ERR]";
-    static private final String L_WRN = "[boot WRN]";
+    static private final String L_ERR = "[!ERR]";
+    static private final String L_WRN = "[!WRN]";
 
     static public boolean isDebug() {
         return MvnLauncherCfg.isDebugEnabled();
@@ -46,6 +46,7 @@ public class Log {
 	}
 
     static private void log(final PrintStream out, String prefix, String message, Object ... args) {
+        //noinspection SynchronizationOnLocalVariableOrMethodParameter
         synchronized (out) {
             StatusLine.resetLine();
             out.print(prefix);

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.boot.loader.mvn;
+package org.springframework.boot.launcher;
 
 import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
 
@@ -27,12 +27,11 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import org.springframework.boot.launcher.mvn.MvnArtifact;
+import org.springframework.boot.launcher.util.Log;
+import org.springframework.boot.launcher.util.StatusLine;
 import org.springframework.boot.loader.Launcher;
-import org.springframework.boot.loader.util.Log;
-import org.springframework.boot.loader.util.StatusLine;
 import org.springframework.boot.loader.util.SystemPropertyUtils;
 
 /**
@@ -44,7 +43,7 @@ import org.springframework.boot.loader.util.SystemPropertyUtils;
  * a property file specified in {@code -DMvnLauncher.defaults} property (which itself
  * defaults to {@code $ user.home}/.springboot/defaults.properties}).
  *
- * @see MvnLauncher
+ * @see org.springframework.boot.launcher.mvn.MvnLauncher
  * @author Patrik Beno
  */
 public enum MvnLauncherCfg {
@@ -128,7 +127,7 @@ public enum MvnLauncherCfg {
 	 * If set, downloads are verified using SHA1 signature provided by remote repository:
 	 * signature mismatch is considered an error, and the artifact is marked
 	 * {@code Invalid}. Enabled by default.
-	 * @see MvnArtifact.Status#Invalid
+	 * @see org.springframework.boot.loader.archive.MvnArtifact.Status#Invalid
 	 */
 	verify(true),
 
@@ -315,7 +314,7 @@ public enum MvnLauncherCfg {
 	}
 
 	public MvnArtifact asMvnArtifact() {
-		return MvnArtifact.parse(asString());
+		return new MvnArtifact(asString());
 	}
 
 	// /

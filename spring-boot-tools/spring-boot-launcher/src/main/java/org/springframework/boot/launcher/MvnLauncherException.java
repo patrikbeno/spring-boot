@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.boot.loader.mvn;
+package org.springframework.boot.launcher;
 
 /**
  * @author Patrik Beno

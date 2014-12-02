@@ -1,6 +1,5 @@
-package org.springframework.boot.loader.mvn;
+package org.springframework.boot.launcher;
 
-import org.springframework.boot.loader.jar.JarFile;
 import org.springframework.boot.loader.util.UrlSupport;
 
 /**

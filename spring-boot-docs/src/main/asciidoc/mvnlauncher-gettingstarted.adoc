@@ -22,12 +22,67 @@ $ cp spring-boot-tools/spring-boot-loader/spring-boot-loader-*jar /opt/springboo
 
 ## Running the Launcher
 
+``` bash
+$ java -jar springboot.jar
+
+[boot] Usage: org.springframework.boot.launcher.Main <groupId>:<artifactId>:<version>[:<packaging>[:<classifier>]] ...
+```
+
+### Running the SpringBoot Sample
+
+``` bash
+$ java -jar springboot.jar org.springframework.boot:spring-boot-sample-mvnlauncher:1.2.0.BUILD-SNAPSHOT
+```
+
+Assuming such artifact is present in your your local repository along with the core SpringBoot dependencies, you should see following output:
+
+----
+[boot] Summary: 18 archives, 5142 KB total (resolved in 45 msec, downloaded: 0 KB). Warnings/Errors: 0/0.
+
+... spring starting up ...
+Hello!
+... spring shutting down ...
+----
+
+However, by default you may be missing some dependencies:
+
+----
+org.springframework.boot.launcher.MvnLauncherException: Cannot resolve org.springframework.boot:spring-boot-sample-mvnlauncher:1.2.0.BUILD-SNAPSHOT:jar: java.io.FileNotFoundException: C:\...\.m2\repository\org\springframework\boot\spring-boot-sample-mvnlauncher\1.2.0.BUILD-SNAPSHOT\maven-metadata.xml (The system cannot find the path specified)
+----
+
+### Configuring the Remote Repository
+
+Now would be the time to property configure your remote repository.
+
+Consider the configuration options and its defaults:
+
+``` bash
+java -jar springboot.jar --MvnLauncher.debug=true
+```
+
+----
+[boot] Configuring SpringBoot MvnLauncher 1.2.0.BUILD-SNAPSHOT
+[boot] MvnLauncher configuration:
+[boot] - MvnLauncher.repository         : null
+[boot] - MvnLauncher.url                : file:///C:\Users\patrik/.m2/repository/
+[boot] - MvnLauncher.username           : null
+[boot] - MvnLauncher.password           : ***
+[boot] Usage: org.springframework.boot.launcher.Main <groupId>:<artifactId>:<version>[:<packaging>[:<classifier>]] ...
+----
+
+(Only relevant options are shown in this extract.)
 
 
 
 
 
+Assuming you have all your dependencies
 
+Now, let's try some artifact from SpringBoot Samples.
 
+Building the sample from sources:
 
-
+``` bash
+$ git clone https://github.com/patrikbeno/spring-boot.git
+$ mvn clean install -pl spring-boot/spring-boot-samples/spring-boot-sample-mvnlauncher -am
+```

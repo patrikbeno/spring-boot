@@ -1,6 +1,6 @@
-package org.springframework.boot.loader.util;
+package org.springframework.boot.launcher.util;
 
-import org.springframework.boot.loader.mvn.MvnLauncherCfg;
+import org.springframework.boot.launcher.MvnLauncherCfg;
 
 import java.util.LinkedList;
 

@@ -1,4 +1,4 @@
-package org.springframework.boot.loader.security;
+package org.springframework.boot.launcher.vault;
 
 /**
  * @author <a href="mailto:patrikbeno@gmail.com">Patrik Beno</a>
