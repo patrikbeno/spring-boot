@@ -13,34 +13,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.boot.loader.mvn;
-
-import static org.springframework.boot.loader.mvn.MvnLauncherCfg.*;
+package org.springframework.boot.launcher.mvn;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.jar.Manifest;
 
+import org.springframework.boot.launcher.MvnLauncherCfg;
+import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.util.Log;
+import org.springframework.boot.launcher.util.StatusLine;
 import org.springframework.boot.loader.ExecutableArchiveLauncher;
+import org.springframework.boot.loader.LaunchedURLClassLoader;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.JarFileArchive;
-import org.springframework.boot.loader.util.Log;
-import org.springframework.boot.loader.util.StatusLine;
+
+import static org.springframework.boot.launcher.MvnLauncherCfg.artifact;
+import static org.springframework.boot.launcher.MvnLauncherCfg.debug;
+import static org.springframework.boot.launcher.MvnLauncherCfg.showClasspath;
 
 /**
  * Specialized implementation of the {@code Launcher} that intelligently downloads
- * dependencies from configured URL-based Maven repository used as a distribution site
- * (e.g. Sonatype Nexus)
+ * dependencies from configured Maven repository.
  *
+ * @see MvnLauncherBase
  * @see org.springframework.boot.loader.ExecutableArchiveLauncher
  *
  * @author Patrik Beno
  */
-public abstract class MvnLauncherBase extends ExecutableArchiveLauncher {
+public class MvnLauncher extends ExecutableArchiveLauncher {
 
 	/**
 	 * Name of the manifest attribute containing the comma-delimited list Maven URIs
@@ -53,47 +59,78 @@ public abstract class MvnLauncherBase extends ExecutableArchiveLauncher {
 	// lazily resolved in #getArtifacts(MvnArtifact)
 	private String mainClass;
 
-	/**
-	 * If any external artifact is defined as main entry point, this method returns
-	 * {@code Start-Class} defined in its manifest. Otherwise, original implementation is
-	 * called which returns {@code Start-Class} as defined in this archive's manifest.
-	 * @see MvnLauncherCfg#artifact
-	 * @see #getClassPathArchives()
-	 * @see #getArtifacts(MvnRepositoryConnector, MvnArtifact)
-	 */
 	@Override
 	protected String getMainClass() throws Exception {
-		// mainClass is set by #getArtifacts
 		return (mainClass != null) ? mainClass : super.getMainClass();
 	}
 
-	/**
-	 * Reads {@link #MF_DEPENDENCIES Spring-Boot-Dependencies} manifest attribute from
-	 * this archive or from Maven artifact defined by {@code -DMvnLauncher.artifact}, and
-	 * resolves all the Maven artifact references using {@code MvnRepositoryConnector}.
-	 * Remote artifacts are downloaded and cached in repository layout in MvnLauncher's
-	 * cache which is used to construct the final classpath.
-	 * @see MvnRepositoryConnector
-	 * @see MvnLauncherCfg#artifact
-	 * @see MvnLauncherCfg#cache
-	 * @see MvnLauncherCfg#cacheFileProtocol
-	 */
 	@Override
 	protected List<Archive> getClassPathArchives() throws Exception {
-		return getClassPathArchives(artifact.isDefined() ? artifact.asMvnArtifact() : null);
+		return getClassPathArchives(MvnLauncherCfg.artifact.isDefined() ? MvnLauncherCfg.artifact.asMvnArtifact() : null);
+	}
+
+	/**
+	 * Always returns false: there are no nested archives.
+	 */
+	@Override
+	protected boolean isNestedArchive(Archive.Entry entry) {
+		return false; // unsupported / irrelevant
+	}
+
+	/// API for embedded use
+
+	/**
+	 * Resolves given artifact and all its dependencies, and configures a class loader
+	 * linked to a specified parent. Caller is responsible for a proper use of the
+	 * resulting class loader and all the classes loaded.
+	 * @param artifact
+	 * @param parent
+	 * @return
+	 */
+    public ClassLoader resolve(MvnArtifact artifact, List<MvnArtifact> ext, ClassLoader parent) {
+		try {
+			List<Archive> archives = getClassPathArchives(artifact, ext);
+			List<URL> urls = new ArrayList<URL>(archives.size());
+			for (Archive archive : archives) {
+				urls.add(archive.getUrl());
+			}
+			ClassLoader cl = new LaunchedURLClassLoader(urls.toArray(new URL[urls.size()]), parent);
+			return cl;
+		}
+		catch (Exception e) {
+			throw new MvnLauncherException(e,
+					"Cannot resolve artifact or its dependencies: " + artifact.asString());
+		}
+	}
+
+    public ClassLoader resolve(MvnArtifact artifact, ClassLoader parent) {
+        return resolve(artifact, null, parent);
+    }
+
+    ///
+
+	/**
+	 * Entry point used by build plugin (Main-Class manifest attribute). This can be
+	 * overriden in build by specifying {@code launcherClass} parameter. Also, you may
+	 * want to skip this and use the generic launcher directly.
+	 * @param args
+	 * @see org.springframework.boot.launcher.Main
+	 */
+	static public void main(String[] args) {
+		new MvnLauncher().launch(args);
 	}
 
 	protected List<Archive> getClassPathArchives(MvnArtifact mvnartifact) throws Exception {
         return getClassPathArchives(mvnartifact, null);
     }
 
-    protected List<Archive> getClassPathArchives(MvnArtifact mvnartifact, List<MvnArtifact> ext) throws Exception {
+	protected List<Archive> getClassPathArchives(MvnArtifact mvnartifact, List<MvnArtifact> ext) throws Exception {
 
-		MvnRepositoryConnector connector = new MvnRepositoryConnector();
-		try {
-			// get list of dependencies from external root artifact (if defined), or
-			// current archive (default)
-			List<MvnArtifact> artifacts = (mvnartifact != null) ? getArtifacts(connector, mvnartifact) : getArtifacts();
+        MvnRepositoryConnector connector = new MvnRepositoryConnector();
+        try {
+            // get list of dependencies from external root artifact (if defined), or
+            // current archive (default)
+            List<MvnArtifact> artifacts = (mvnartifact != null) ? getArtifacts(connector, mvnartifact) : getArtifacts();
 
             // register also every extra artifact not mentioned in main artifact and its dependencies
             ext = new ArrayList<MvnArtifact>(ext != null ? ext : Collections.<MvnArtifact>emptyList());
@@ -103,32 +140,37 @@ public abstract class MvnLauncherBase extends ExecutableArchiveLauncher {
                 }
             }
 
-			// resolve/download/update/cache all referenced artifacts
-			connector.resolveArtifacts(artifacts);
+            // resolve/download/update/cache all referenced artifacts
+            connector.resolveArtifacts(artifacts);
 
-			// create list of archives for all resolved and available artifacts
-			List<Archive> archives = new LinkedList<Archive>();
-			archives.add(getArchive()); // current archive first
-			for (MvnArtifact ma : artifacts) {
-				if (ma.getFile() != null && ma.getFile().exists()) {
-					archives.add(new JarFileArchive(ma.getFile()));
-				}
-			}
+            // create list of archives for all resolved and available artifacts
+            List<Archive> archives = new LinkedList<Archive>();
+            archives.add(getArchive()); // current archive first
+            for (MvnArtifact ma : artifacts) {
+                if (ma.getFile() != null && ma.getFile().exists()) {
+                    archives.add(new JarFileArchive(ma.getFile()));
+                }
+            }
 
-			// report class path
-			if (showClasspath.asBoolean() && debug.asBoolean()) {
-				Log.debug("Classpath Archives (in actual order):");
-				for (Archive a : archives) {
+            // report class path
+            if (showClasspath.asBoolean() && debug.asBoolean()) {
+                Log.debug("Classpath Archives (in actual order):");
+                for (Archive a : archives) {
                     Log.debug("- %s", a);
                 }
             }
 
-			return archives;
-		}
-		finally {
-			connector.close();
+            return archives;
+        }
+        finally {
+            connector.close();
             StatusLine.resetLine();
-		}
+        }
+    }
+
+	@Override
+	public void launch(String[] args) {
+		super.launch(args); // todo implement this
 	}
 
 	@Override
@@ -182,6 +224,7 @@ public abstract class MvnLauncherBase extends ExecutableArchiveLauncher {
 	 */
 	protected List<MvnArtifact> getArtifacts(MvnRepositoryConnector connector, MvnArtifact ma) throws Exception {
         Log.debug("Resolving main artifact");
+
 		StatusLine.push("Resolving %s", ma);
         try {
             File f = connector.resolve(ma);
@@ -210,7 +253,7 @@ public abstract class MvnLauncherBase extends ExecutableArchiveLauncher {
 			if (s == null || s.trim().isEmpty()) {
 				continue;
 			}
-			result.add(MvnArtifact.parse(s));
+			result.add(new MvnArtifact(s));
 		}
 		return result;
 	}

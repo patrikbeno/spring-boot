@@ -1,10 +1,8 @@
-package org.springframework.boot.loader.mvn;
-
-import org.springframework.boot.loader.MvnLauncher;
-import org.springframework.boot.loader.jar.JarFile;
+package org.springframework.boot.launcher.mvn;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.springframework.boot.launcher.AbstractTest;
 
 
 /**
@@ -16,7 +14,7 @@ public class MvnLauncherTest extends AbstractTest {
 	public void test() {
 		MvnLauncher launcher = new MvnLauncher();
 		ClassLoader cl = launcher.resolve(
-				MvnArtifact.parse("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT"),
+				new MvnArtifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT"),
 				Thread.currentThread().getContextClassLoader());
 		Assert.assertNotNull(cl);
 

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.boot.loader;
+package org.springframework.boot.launcher;
 
 import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
 
@@ -22,10 +22,11 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.springframework.boot.loader.mvn.MvnLauncherCfg;
-import org.springframework.boot.loader.mvn.MvnRepository;
-import org.springframework.boot.loader.security.Vault;
-import org.springframework.boot.loader.util.Log;
+import org.springframework.boot.launcher.mvn.MvnLauncher;
+import org.springframework.boot.launcher.mvn.MvnRepository;
+import org.springframework.boot.launcher.util.Log;
+import org.springframework.boot.launcher.vault.Vault;
+import org.springframework.boot.loader.util.SystemPropertyUtils;
 import org.springframework.boot.loader.util.UrlSupport;
 
 /**
@@ -39,13 +40,13 @@ public class Main {
 	 * implementation delegating to {@code new MyMain().launch(args);}
 	 */
 	public static void main(String[] args) {
-        new Main().launch(args);
+		new Main().launch(args);
 	}
 
 	/**
 	 * Process arguments and delegate to {@code MvnLauncher}
 	 * @param args
-	 * @see MvnLauncher
+	 * @see org.springframework.boot.launcher.mvn.MvnLauncher
 	 */
 	protected void launch(String[] args) {
 
@@ -55,11 +56,7 @@ public class Main {
 
         MvnLauncherCfg.configure();
 
-		if (MvnLauncherCfg.initVault.asBoolean()) {
-			Log.info("Initializing user vault: %s", resolvePlaceholders(Vault.USER_DATA));
-			Log.warn("Protect the key: %s", resolvePlaceholders(Vault.USER_PRIVATE));
-			Vault.initUserSecureStore();
-		}
+		Vault.vault();
 
         if (MvnLauncherCfg.save.asBoolean()) {
             saveCredentials();
@@ -123,6 +120,7 @@ public class Main {
 
 		return arglist.toArray(new String[arglist.size()]);
 	}
+
 
     private void saveCredentials() {
         String id = MvnLauncherCfg.repository.asString();

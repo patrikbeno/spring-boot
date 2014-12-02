@@ -1,24 +1,21 @@
-package org.springframework.boot.loader.security;
+package org.springframework.boot.launcher.vault;
 
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
-import java.nio.file.FileVisitor;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.springframework.boot.loader.mvn.MvnLauncherCfg;
+import org.springframework.boot.launcher.MvnLauncherCfg;
 import org.springframework.boot.loader.util.SystemPropertyUtils;
 import org.springframework.boot.loader.util.UrlSupport;
 
-import static org.springframework.boot.loader.security.Vault.vault;
+import static org.springframework.boot.launcher.vault.Vault.vault;
 
 /**
  * @author <a href="mailto:patrikbeno@gmail.com">Patrik Beno</a>

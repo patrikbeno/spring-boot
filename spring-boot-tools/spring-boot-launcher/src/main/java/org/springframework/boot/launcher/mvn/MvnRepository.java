@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.boot.loader.mvn;
+package org.springframework.boot.launcher.mvn;
 
-import org.springframework.boot.loader.security.Vault;
+import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.vault.Vault;
 
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -46,9 +47,13 @@ public class MvnRepository {
         String pcredentials = String.format(P_CREDENTIALS, repositoryId);
 
         String url = vault.getProperty(purl);
+        if (url == null) { return null; }
+
         String userinfo = vault.getProperty(pcredentials);
 
-        if (userinfo == null) { return null; }
+        if (userinfo == null) {
+            return new MvnRepository(repositoryId, URI.create(url), null, null);
+        }
 
         String[] userpass = userinfo.split(":", 2);
 

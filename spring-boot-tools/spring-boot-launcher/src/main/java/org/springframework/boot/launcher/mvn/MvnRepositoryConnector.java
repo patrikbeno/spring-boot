@@ -13,21 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.boot.loader.mvn;
+package org.springframework.boot.launcher.mvn;
 
-import static org.springframework.boot.loader.mvn.MvnLauncherCfg.*;
+import static org.springframework.boot.launcher.MvnLauncherCfg.*;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Scanner;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.parsers.DocumentBuilder;
@@ -35,9 +48,10 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathFactory;
 
-import org.springframework.boot.loader.security.Vault;
-import org.springframework.boot.loader.util.Log;
-import org.springframework.boot.loader.util.StatusLine;
+import org.springframework.boot.launcher.MvnLauncherCfg;
+import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.util.Log;
+import org.springframework.boot.launcher.util.StatusLine;
 import org.w3c.dom.Document;
 
 /**
@@ -72,6 +86,7 @@ public class MvnRepositoryConnector {
         // check http:// and https:// repositories: must be able to connect successfully
         if (repository.getURL().getProtocol().matches("https?")) {
             try {
+				StatusLine.push("Verifying connection to %s", repository.getURL().getHost());
                 URLConnection con = urlcon(repository.getURL(), false);
                 con.setConnectTimeout(1000);
                 con.connect();
@@ -80,6 +95,9 @@ public class MvnRepositoryConnector {
             catch (IOException e) {
                 throw new MvnLauncherException(e, "Invalid or misconfigured repository " + url);
             }
+			finally {
+				StatusLine.pop();
+			}
 
             // verify file:// repositories: directory must exist
         }
@@ -104,21 +122,23 @@ public class MvnRepositoryConnector {
 
         boolean useDefinedCredentials = MvnLauncherCfg.username.isDefined() && MvnLauncherCfg.password.isDefined();
 
-        if (MvnLauncherCfg.url.isDefined()) {
-            repository = new MvnRepository(
-                    MvnLauncherCfg.repository.isDefined() ? MvnLauncherCfg.repository.asString() : "<undefined>",
-                    MvnLauncherCfg.url.asURI(true),
-                    useDefinedCredentials ? MvnLauncherCfg.username.asString() : null,
-                    useDefinedCredentials ? MvnLauncherCfg.password.asString() : null
-            );
-        }
-        if (MvnLauncherCfg.repository.isDefined()) {
+		if (MvnLauncherCfg.url.isDefined()) {
+			repository = new MvnRepository(
+					MvnLauncherCfg.repository.isDefined() ? MvnLauncherCfg.repository.asString() : "<undefined>",
+					MvnLauncherCfg.url.asURI(true),
+					useDefinedCredentials ? MvnLauncherCfg.username.asString() : null,
+					useDefinedCredentials ? MvnLauncherCfg.password.asString() : null
+			);
+		} else if (MvnLauncherCfg.repository.isDefined()) {
 			String id = MvnLauncherCfg.repository.asString();
 			repository = MvnRepository.forRepositoryId(id);
-        }
-//        if (repository == null) {
-//            repository = new MvnRepository("<default>", MvnLauncherCfg.url.asURI(true), null);
-//        }
+			if (repository == null) {
+				throw new MvnLauncherException(String.format(
+						"No such repository: %s. Provide URL (and optional username and password). " +
+								"Consider saving the repository configuration using the --MvnLauncher.save=true option.",
+						id));
+			}
+		}
         return repository;
     }
 

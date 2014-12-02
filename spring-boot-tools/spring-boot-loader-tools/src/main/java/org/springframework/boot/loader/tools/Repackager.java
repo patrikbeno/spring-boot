@@ -16,7 +16,7 @@
 
 package org.springframework.boot.loader.tools;
 
-import org.springframework.boot.loader.mvn.MvnArtifact;
+import org.springframework.boot.loader.archive.MvnArtifact;
 
 import java.io.File;
 import java.io.FileInputStream;

@@ -31,7 +31,7 @@ import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.bundling.Jar;
 import org.springframework.boot.gradle.SpringBootPluginExtension;
-import org.springframework.boot.loader.mvn.MvnArtifact;
+import org.springframework.boot.loader.archive.MvnArtifact;
 import org.springframework.boot.loader.tools.Repackager;
 import org.springframework.util.FileCopyUtils;
 
@@ -230,7 +230,7 @@ public class RepackageTask extends DefaultTask {
 			for (ResolvedArtifact a : cfg.getResolvedConfiguration().getResolvedArtifacts()) {
 				ModuleVersionIdentifier id = a.getModuleVersion().getId();
 				// todo do we support custom packaging/classifier?
-				MvnArtifact mvnuri = MvnArtifact.create(id.getGroup(), id.getName(), id.getVersion(), "jar", null);
+				MvnArtifact mvnuri = new MvnArtifact(id.getGroup(), id.getName(), id.getVersion(), "jar", null);
 				if (!index.contains(mvnuri)) {
 					mvnuris.add(mvnuri);
 					index.add(mvnuri);

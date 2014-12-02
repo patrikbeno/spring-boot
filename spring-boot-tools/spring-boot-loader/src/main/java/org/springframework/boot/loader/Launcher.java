@@ -29,7 +29,6 @@ import java.util.logging.Logger;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.ExplodedArchive;
 import org.springframework.boot.loader.archive.JarFileArchive;
-import org.springframework.boot.loader.util.Log;
 import org.springframework.boot.loader.util.UrlSupport;
 
 /**
@@ -60,9 +59,9 @@ public abstract class Launcher {
 			UrlSupport.init();
 			ClassLoader classLoader = createClassLoader(getClassPathArchives());
 			launch(args, getMainClass(), classLoader);
-		}
-		catch (Exception e) {
-			Log.error(e, "Could not launch application");
+		} catch (Exception e) {
+			//Log.error(e, "Could not launch application");
+			e.printStackTrace();
 			System.exit(1);
 		}
 	}
@@ -147,6 +146,8 @@ public abstract class Launcher {
 		if (path == null) {
 			throw new IllegalStateException("Unable to determine code source archive");
 		}
+//		System.out.println(path);
+		path = path.replaceFirst("^file:/(.*)!/", "$1");
 		File root = new File(path);
 		if (!root.exists()) {
 			throw new IllegalStateException(
