@@ -65,7 +65,7 @@ public class MvnArtifact {
 	 * @param uri
 	 * @return
 	 */
-	protected MvnArtifact(String uri) {
+	public MvnArtifact(String uri) {
 
 		String[] parts = uri.split(":");
 
@@ -129,6 +129,32 @@ public class MvnArtifact {
 		return (classifier != null) ? String.format("%s:%s:%s:%s:%s", groupId,
 				artifactId, resolvedVersion, packaging, classifier) : String.format(
 				"%s:%s:%s:%s", groupId, artifactId, resolvedVersion, packaging);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		MvnArtifact that = (MvnArtifact) o;
+
+		if (!artifactId.equals(that.artifactId)) return false;
+		if (classifier != null ? !classifier.equals(that.classifier) : that.classifier != null) return false;
+		if (!groupId.equals(that.groupId)) return false;
+		if (packaging != null ? !packaging.equals(that.packaging) : that.packaging != null) return false;
+		if (!version.equals(that.version)) return false;
+
+		return true;
+	}
+
+	@Override
+	public int hashCode() {
+		int result = groupId.hashCode();
+		result = 31 * result + artifactId.hashCode();
+		result = 31 * result + version.hashCode();
+		result = 31 * result + (classifier != null ? classifier.hashCode() : 0);
+		result = 31 * result + (packaging != null ? packaging.hashCode() : 0);
+		return result;
 	}
 
 	@Override

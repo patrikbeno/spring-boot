@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 import org.gradle.api.Action;
@@ -222,8 +223,7 @@ public class RepackageTask extends DefaultTask {
 		 * a manifest. {@code customConfiguration} or @{code runtime} configuration is used
 		 */
 		private List<MvnArtifact> getResolvedDependencies() {
-			Set<MvnArtifact> index = new HashSet<MvnArtifact>();
-			List<MvnArtifact> mvnuris = new ArrayList<MvnArtifact>();
+			Set<MvnArtifact> mvnuris = new TreeSet<MvnArtifact>(MvnArtifact.COMPARATOR);
 			String cfgname = (this.extension.getCustomConfiguration() != null)
 					? this.extension.getCustomConfiguration() : "runtime";
 			Configuration cfg = libraries.getProject().getConfigurations().getByName(cfgname);
@@ -231,12 +231,9 @@ public class RepackageTask extends DefaultTask {
 				ModuleVersionIdentifier id = a.getModuleVersion().getId();
 				// todo do we support custom packaging/classifier?
 				MvnArtifact mvnuri = new MvnArtifact(id.getGroup(), id.getName(), id.getVersion(), "jar", null);
-				if (!index.contains(mvnuri)) {
-					mvnuris.add(mvnuri);
-					index.add(mvnuri);
-				}
+				mvnuris.add(mvnuri);
 			}
-			return mvnuris;
+			return new ArrayList<MvnArtifact>(mvnuris);
 		}
 	}
 
