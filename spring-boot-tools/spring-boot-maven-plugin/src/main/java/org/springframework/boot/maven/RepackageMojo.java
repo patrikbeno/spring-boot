@@ -19,9 +19,9 @@ package org.springframework.boot.maven;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
 
@@ -191,21 +191,16 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 	 * a manifest.
 	 */
 	private List<MvnArtifact> getResolvedDependencies() {
-		Set<MvnArtifact> index = new HashSet<MvnArtifact>();
-		List<MvnArtifact> mvnuris = new ArrayList<MvnArtifact>();
+		Set<MvnArtifact> mvnuris = new TreeSet<MvnArtifact>(MvnArtifact.COMPARATOR);
 
-		Set<String> scopes = StringUtils.commaDelimitedListToSet("compile,runtime,provided");
+		Set<String> scopes = StringUtils.commaDelimitedListToSet("compile,runtime");
 		for (Artifact d : project.getArtifacts()) {
 			if (!scopes.contains(d.getScope())) { continue; }
 			MvnArtifact mvnuri = new MvnArtifact(
 					d.getGroupId(), d.getArtifactId(), d.getVersion(), d.getType(), d.getClassifier());
-			if (!index.contains(mvnuri)) {
-				mvnuris.add(mvnuri);
-				index.add(mvnuri);
-			}
+			mvnuris.add(mvnuri);
 		}
-
-		return mvnuris;
+		return new ArrayList<MvnArtifact>(mvnuris);
 	}
 
 	private File getTargetFile() {
