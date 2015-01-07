@@ -1,6 +1,6 @@
 buildscript {
 	ext {
-		springBootVersion = '1.2.0.BUILD-SNAPSHOT'
+		springBootVersion = '1.2.1.BUILD-SNAPSHOT'
 	}
 	repositories {
 		// NOTE: You should declare only repositories that you need here
@@ -27,8 +27,8 @@ springBoot {
 }
 
 jar {
-	baseName = 'spring-boot-sample-simple'
-	version =  '0.0.0'
+	baseName = 'spring-boot-sample-mvnlauncher'
+	version =  "$springBootVersion"
 }
 
 run {
