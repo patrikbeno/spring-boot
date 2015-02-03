@@ -15,9 +15,12 @@
  */
 package org.springframework.boot.launcher.vault;
 
-import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
+import org.springframework.boot.launcher.util.Base64Support;
+import org.springframework.boot.launcher.util.Log;
 
+import javax.crypto.Cipher;
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -25,27 +28,26 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.SoftReference;
-import java.math.BigInteger;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.GeneralSecurityException;
-import java.security.Key;
 import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.PublicKey;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
-import java.util.Arrays;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.crypto.Cipher;
-
-import org.springframework.boot.launcher.util.Log;
-import org.springframework.boot.launcher.MvnLauncherCfg;
-import org.springframework.boot.loader.util.SystemPropertyUtils;
+import static org.springframework.boot.launcher.util.Base64Support.getDecoder;
+import static org.springframework.boot.launcher.util.Base64Support.getEncoder;
+import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
 
 /**
  * SpringBoot Vault implements reusable secure data store based on asymmetric encryption.
@@ -61,200 +63,179 @@ import org.springframework.boot.loader.util.SystemPropertyUtils;
  */
 public class Vault {
 
-    static public final String SYSTEM   = "${springboot.vault.useSystem:false}";
+    static private final Charset UTF8 = Charset.forName("UTF-8");
 
-    static public final String ALG      = "${springboot.vault.algorithm:RSA}";
-    static public final String KEYSIZE  = "${springboot.vault.keysize:2048}";
+    static public final String USER_DATA_FILE   = "${springboot.vault.user.dataFile:${user.home}/.springboot/${vault.fname:vault}.properties}";
+    static public final String USER_CERT_FILE   = "${springboot.vault.user.certFile:${user.home}/.springboot/${vault.fname:vault}.crt}";
+    static public final String USER_CERT_TYPE   = "${springboot.vault.user.certType:X.509}";
+    static public final String USER_KEY_FILE    = "${springboot.vault.user.keyFile:${user.home}/.springboot/${vault.fname:vault}.key}";
+    static public final String USER_KEY_TYPE    = "${springboot.vault.user.keyType:RSA}";
 
-    static public final String FNAME            = "${springboot.vault.fileName:vault}";
-    static public final String FEXT_PRIVATE     = "${springboot.vault.fileExtPrivate:key}";
-    static public final String FEXT_PUBLIC      = "${springboot.vault.fileExtPublic:pub}";
-    static public final String FEXT_DATA        = "${springboot.vault.fileExtData:properties}";
-    static public final String PATH_SYSTEM      = "${springboot.vault.systemPath:/etc/springboot}";
-    static public final String PATH_USER        = "${springboot.vault.userPath:${user.home}/.springboot}";
-
-    static private final String SYSTEM_PRIVATE_DFLT
-            = String.format("%s/%s.%s", PATH_SYSTEM, FNAME, FEXT_PRIVATE);
-    static private final String SYSTEM_PUBLIC_DFLT
-            = String.format("%s/%s.%s", PATH_SYSTEM, FNAME, FEXT_PUBLIC);
-    static private final String SYSTEM_DATA_DFLT
-            = String.format("%s/%s.%s", PATH_SYSTEM, FNAME, FEXT_DATA);
-
-    static private final String USER_PRIVATE_DFLT
-            = String.format("%s/%s.%s", PATH_USER, FNAME, FEXT_PRIVATE);
-    static private final String USER_PUBLIC_DFLT
-            = String.format("%s/%s.%s", PATH_USER, FNAME, FEXT_PUBLIC);
-    static private final String USER_DATA_DFLT
-            = String.format("%s/%s.%s", PATH_USER, FNAME, FEXT_DATA);
-
-    static public final String SYSTEM_PRIVATE   = String.format("${springboot.vault.systemPrivateKey:%s}", SYSTEM_PRIVATE_DFLT);
-    static public final String SYSTEM_PUBLIC    = String.format("${springboot.vault.systemPublicKey:%s}", SYSTEM_PUBLIC_DFLT);
-    static public final String SYSTEM_DATA      = String.format("${springboot.vault.systemData:%s}", SYSTEM_DATA_DFLT);
-
-    static public final String USER_PRIVATE     = String.format("${springboot.vault.userPrivateKey:%s}", USER_PRIVATE_DFLT);
-    static public final String USER_PUBLIC      = String.format("${springboot.vault.userPublicKey:%s}", USER_PUBLIC_DFLT);
-    static public final String USER_DATA        = String.format("${springboot.vault.userData:%s}", USER_DATA_DFLT);
+    static public final String SYSTEM_DATA_FILE = "${springboot.vault.system.dataFile:/etc/springboot/${vault.fname:vault}.properties}";
+    static public final String SYSTEM_CERT_FILE = "${springboot.vault.system.certFile:/etc/springboot/${vault.fname:vault}.crt}";
+    static public final String SYSTEM_CERT_TYPE = "${springboot.vault.system.certType:X.509}";
+    static public final String SYSTEM_KEY_FILE  = "${springboot.vault.system.keyFile:/etc/springboot/${vault.fname:vault}.key}";
+    static public final String SYSTEM_KEY_TYPE  = "${springboot.vault.system.keyType:RSA}";
 
 	static private SoftReference<Vault> INSTANCE;
 
     static public Vault instance() { return vault(); }
-
-    static public void close() {
-        INSTANCE.clear();
-    }
 
 	static public Vault vault() {
         VaultPermission.READ_PERMISSION.check();
 
         Vault store = INSTANCE != null ? INSTANCE.get() : null;
 		if (store == null) {
-            boolean system = MvnLauncherCfg.useSystemVault.asBoolean();
-            store = (system) ? systemVault() : userVault();
-            INSTANCE = new SoftReference<Vault>(store);
+            INSTANCE = new SoftReference<Vault>(store = userVault());
         }
         return store;
 	}
 
-    static public void initSystemSecureStore() {
-        initVault(systemVault());
-    }
-
-    static public void initUserSecureStore() {
-        initVault(userVault());
-    }
-
-    static public void initVault(final Vault vault) {
-        VaultPermission.WRITE_PERMISSION.check();
-        boolean allow = true;
-        for (File f : Arrays.asList(vault.privateKeyFile, vault.publicKeyFile, vault.propertiesFile)) {
-            allow &= !f.exists();
-            if (f.exists()) {
-                Log.warn("Rejected vault initialization: Refusing to overwrite existing file in %s", f);
-            }
-        }
-        if (allow) {
-            Log.info("Initializing vault: %s", vault.propertiesFile);
-            Log.warn("Protect the key: %s", vault.privateKeyFile);
-            vault.saveKeyPair(vault.generateKeyPair());
-            vault.save();
-        }
-    }
-
     static private Vault systemVault() {
-        File privateKey = new File(resolvePlaceholders(SYSTEM_PRIVATE));
-        File publicKey = new File(resolvePlaceholders(SYSTEM_PUBLIC));
-        File props = new File(resolvePlaceholders(SYSTEM_DATA));
-        return new Vault(privateKey, publicKey, props, null);
+        return new Vault(
+                new File(resolvePlaceholders(SYSTEM_DATA_FILE)),
+                new File(resolvePlaceholders(SYSTEM_CERT_FILE)),
+                resolvePlaceholders(SYSTEM_CERT_TYPE),
+                new File(resolvePlaceholders(SYSTEM_KEY_FILE)),
+                resolvePlaceholders(SYSTEM_KEY_TYPE),
+                null);
     }
 
     static private Vault userVault() {
-        File privateKey = new File(resolvePlaceholders(USER_PRIVATE));
-        File publicKey = new File(resolvePlaceholders(USER_PUBLIC));
-        File props = new File(resolvePlaceholders(USER_DATA));
-        Vault vault = new Vault(privateKey, publicKey, props, systemVault());
-        if (!vault.isReadable()) {
-            initVault(vault);
-        }
-        return vault;
+        return new Vault(
+                new File(resolvePlaceholders(USER_DATA_FILE)),
+                new File(resolvePlaceholders(USER_CERT_FILE)),
+                resolvePlaceholders(USER_CERT_TYPE),
+                new File(resolvePlaceholders(USER_KEY_FILE)),
+                resolvePlaceholders(USER_KEY_TYPE),
+                systemVault());
     }
 
     // private key
-    private File privateKeyFile;
-    private PrivateKey privateKey;
+    private File keyFile;
+    private String keyType;
+    private PrivateKey key;
 
     // public key
-    private File publicKeyFile;
-    private PublicKey publicKey;
+    private File certFile;
+    private String certType;
+    private Certificate cert;
 
     // data
-    private File propertiesFile;
-    private Properties properties;
+    private File dataFile;
+    private Properties data;
 
-    // link to parent vault, usually system one
+    // link to parent vault, usually system-scoped
     private Vault parent;
 
-    private final Charset UTF8 = Charset.forName("UTF-8");
-    private final String algorithm = SystemPropertyUtils.resolvePlaceholders(ALG);
-    private final int keysize = Integer.parseInt(SystemPropertyUtils.resolvePlaceholders(KEYSIZE));
-
-
-    private Vault(File privateKeyFile, File publicKeyFile, File propertiesFile, Vault parent) {
-        this.privateKeyFile = privateKeyFile;
-        this.publicKeyFile = publicKeyFile;
-        this.propertiesFile = propertiesFile;
+    private Vault(File dataFile, File certFile, String certType, File keyFile, String keyType, Vault parent) {
+        this.keyFile = keyFile;
+        this.keyType = keyType;
+        this.certFile = certFile;
+        this.certType = certType;
+        this.dataFile = dataFile;
         this.parent = parent;
     }
 
     ///
 
     public boolean isReadable() {
-        return privateKey != null || (
-                privateKeyFile.exists() && privateKeyFile.canRead()
-                && propertiesFile.exists() && propertiesFile.canRead());
+        return key != null || keyFile.exists() && keyFile.canRead() && dataFile.exists() && dataFile.canRead();
     }
 
     public boolean isWritable() {
-        return publicKey != null || (
-                publicKeyFile.exists() && publicKeyFile.canRead()
-                && propertiesFile.exists() && propertiesFile.canWrite());
-    }
-
-    public void setProperty(String key, String value) {
-        setProperty(key, value, true);
-    }
-
-    public void setProperty(String key, String value, boolean encrypt) {
-        VaultPermission.WRITE_PERMISSION.check();
-        loadWritable();
-        String s = (encrypt) ? encrypt(value) : value;
-        properties.setProperty(key, s);
-        save();
-    }
-
-    public String getProperty(String key) {
-        VaultPermission.READ_PERMISSION.check();
-        loadReadable();
-        String value = decrypt(properties.getProperty(key));
-        if (value == null && parent != null) {
-            value = parent.getProperty(key);
-        }
-        return value;
+        return cert != null || certFile.exists() && certFile.canRead() && dataFile.exists() && dataFile.canWrite();
     }
 
     public boolean containsKey(String key) {
         VaultPermission.READ_PERMISSION.check();
         loadReadable();
-        return properties.getProperty(key) != null || parent.containsKey(key);
+        return data.getProperty(key) != null || parent.containsKey(key);
     }
 
-    public String resolve(String text) {
-        return resolve(text, Pattern.compile("\\{secure:([^}]+)\\}"));
+    public void setProperty(String key, String value) {
+        VaultPermission.WRITE_PERMISSION.check();
+        loadWritable();
+        String s = resolve(value, true);
+        data.setProperty(key, s);
+        save();
     }
 
-    private String resolve(String text, Pattern pattern) {
+    public void setEncryptedProperty(String key, String value) {
+        setProperty(key, String.format("${encrypt:%s}", value));
+    }
+
+    public String getProperty(String key) {
+        VaultPermission.READ_PERMISSION.check();
+        loadReadable();
+        String value = resolve(data.getProperty(key));
+        if (value == null && parent != null) {
+            value = resolve(parent.getProperty(key), true);
+        }
+        return value;
+    }
+
+    public String getProperty(String key, String dflt) {
+        String value = getProperty(key);
+        return (value != null) ? value : dflt;
+    }
+
+
+    Pattern REFERENCE = Pattern.compile("\\$\\{([^}]+)\\}");
+    Pattern ESCAPE = Pattern.compile("([^:]+):((?s).*)");
+
+    protected String resolve(String text) {
+        return resolve(text, false);
+    }
+
+    protected String resolve(String text, boolean write) {
+        if (text == null) { return null; }
+
         StringBuilder sb = new StringBuilder();
-        Matcher m = pattern.matcher(text);
+        Matcher m = REFERENCE.matcher(text);
         while (m.find()) {
-            String key = m.group(1);
-            String resolved = getProperty(key);
+            String reference = m.group(1);
+            String resolved = write ? write(reference) : read(reference);
             sb.append(text.substring(m.regionStart(), m.start()));
-            sb.append(resolved != null ? resolved : key);
+            sb.append(resolved != null ? resolved : reference);
             m = m.region(m.end(), m.regionEnd());
         }
         sb.append(text.substring(m.regionStart(), m.regionEnd()));
         return sb.toString();
     }
 
+    private String read(String reference) {
+        Matcher m = ESCAPE.matcher(reference);
+        String type = m.matches() ? m.group(1) : null;
+        String value = m.matches() ? m.group(2) : reference;
+        if ("encrypted".equals(type)) {
+            return decrypt(value);
+        } else {
+            return getProperty(value);
+        }
+    }
+
+    private String write(String reference) {
+        Matcher m = ESCAPE.matcher(reference);
+        String type = m.matches() ? m.group(1) : null;
+        String value = m.matches() ? m.group(2) : reference;
+        if ("encrypt".equals(type)) {
+            return encrypt(value);
+        } else {
+            return String.format("${%s}", reference);
+        }
+    }
+
     ///
 
     private void loadReadable() {
-        if (properties == null) { properties = loadProperties(); }
-        if (privateKey == null) { privateKey = loadPrivateKey(); }
+        if (data == null) { data = loadProperties(); }
+        if (key == null) { key = loadPrivateKey(); }
     }
 
     private void loadWritable() {
-        if (properties == null) { properties = loadProperties(); }
-        if (publicKey == null) { publicKey = loadPublicKey(); }
+        if (data == null) { data = loadProperties(); }
+        if (cert == null) { cert = loadCertificate(); }
     }
 
     /**
@@ -264,10 +245,20 @@ public class Vault {
      */
     private PrivateKey loadPrivateKey() {
         VaultPermission.READ_PERMISSION.check();
-        if (!privateKeyFile.exists()) {
+        if (!keyFile.exists()) {
             return null;
         }
-        return (PrivateKey) loadKey(privateKeyFile);
+        try {
+            byte[] bytes = loadPEM(keyFile.toPath());
+            KeySpec pkspec = new PKCS8EncodedKeySpec(bytes);
+            KeyFactory kf = KeyFactory.getInstance(keyType);
+            PrivateKey key = kf.generatePrivate(pkspec);
+            return key;
+        } catch (InvalidKeySpecException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -275,113 +266,59 @@ public class Vault {
      * @return
      * @see java.security.spec.X509EncodedKeySpec
      */
-    private PublicKey loadPublicKey() {
-        if (!publicKeyFile.exists()) {
+    private Certificate loadCertificate() {
+        if (!certFile.exists()) {
             return null;
         }
-        return (PublicKey) loadKey(publicKeyFile);
+        try {
+            byte[] bytes = loadPEM(certFile.toPath());
+            CertificateFactory cf = CertificateFactory.getInstance(certType);
+            Certificate cert = cf.generateCertificate(new ByteArrayInputStream(bytes));
+            return cert;
+        } catch (CertificateException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
      * Loads properties from specified data file. Returns empty properties if the source file is missing.
      * @return
-     * @see #propertiesFile
+     * @see #dataFile
      */
     private Properties loadProperties() {
-        if (!propertiesFile.exists()) {
+        if (!dataFile.exists()) {
             return new Properties();
         }
         InputStream in = null;
         try {
-            in = new BufferedInputStream(new FileInputStream(propertiesFile));
+            in = new BufferedInputStream(new FileInputStream(dataFile));
             Properties props = new Properties();
             props.load(in);
             return props;
         } catch (IOException e) {
-            throw new VaultException(e, "Error loading data: " + propertiesFile);
+            throw new VaultException(e, "Error loading data: " + dataFile);
         } finally {
             if (in != null) try { in.close(); } catch (IOException ignore) {}
         }
     }
 
-    /**
-     * Generate new key pair according to specified algorithm and key size.
-     * @return
-     * @throws VaultException when key generation fails.
-     */
-    private KeyPair generateKeyPair() {
+    private byte[] loadPEM(Path path) {
         try {
-            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(algorithm);
-            keyPairGenerator.initialize(keysize);
-            KeyPair keyPair = keyPairGenerator.genKeyPair();
-            return keyPair;
-        }
-        catch (GeneralSecurityException e) {
-            throw new VaultException(e, "Error generating key");
-        }
-    }
-
-    /**
-     * Saves both private and public keys for a specified key pair.
-     * @param keyPair
-     */
-	private void saveKeyPair(KeyPair keyPair) {
-        saveKey(privateKeyFile, keyPair.getPrivate());
-        saveKey(publicKeyFile, keyPair.getPublic());
-	}
-
-    /**
-     * Saves the {@code key} in a given {@code file}, raising {@code VaultException} if anything fails.
-     *
-     * @param file
-     * @param data
-     */
-	private void saveKey(File file, Key key) throws VaultException {
-        VaultPermission.WRITE_PERMISSION.check();
-        FileOutputStream out = null;
-        try {
-            file.getParentFile().mkdirs();
-            out = new FileOutputStream(file);
-            boolean isPrivateKey = key instanceof PrivateKey;
-            String data = toHexString(key.getEncoded());
-            Properties props = new Properties();
-            props.setProperty("algorithm", key.getAlgorithm());
-            props.setProperty("format", key.getFormat());
-            props.setProperty("type", isPrivateKey ? "private" : "public");
-            props.setProperty("data", data);
-            props.store(out, String.format("SpringBoot Vault %s Key", isPrivateKey ? "Private" : "Public"));
+            String src = new String(Files.readAllBytes(path), UTF8);
+            String base64 = Pattern.compile("(?m)(?s)^-----BEGIN .*-----$(.*)^-----+END .*-----$.*")
+                    .matcher(src)
+                    .replaceFirst("$1");
+            byte[] bytes = Base64Support.getMimeDecoder().decode(base64);
+            return bytes;
         } catch (IOException e) {
-            throw new VaultException(e, "Error saving key: " + file);
-        } finally {
-            if (out != null) try { out.close(); } catch (IOException ignore) {}
-        }
-    }
-
-    private Key loadKey(File f) {
-        InputStream in = null;
-        try {
-            in = new FileInputStream(f);
-            Properties props = new Properties();
-            props.load(in);
-            String algorithm = props.getProperty("algorithm");
-            boolean isPrivateKey = props.getProperty("type").equals("private");
-            byte[] data = fromHexString(props.getProperty("data"));
-            KeyFactory factory = KeyFactory.getInstance(algorithm);
-            Key key = isPrivateKey
-                    ? factory.generatePrivate(new PKCS8EncodedKeySpec(data)) 
-                    : factory.generatePublic(new X509EncodedKeySpec(data));
-            return key;
-        } catch (Exception e) {
-            throw new VaultException(e, "Error loading file: " + f);
-        } finally {
-            if (in != null) try { in.close(); } catch (Exception ignore) {}
+            throw new RuntimeException(e);
         }
     }
 
     /**
-     * Saves the {@code properties} in associated {@code propertiesFile}.
-     * @see #properties
-     * @see #propertiesFile
+     * Saves the {@code properties} in associated {@code dataFile}.
+     * @see #data
+     * @see #dataFile
      */
     public synchronized void save() {
         saveData();
@@ -394,10 +331,10 @@ public class Vault {
         VaultPermission.WRITE_PERMISSION.check();
         OutputStream out = null;
         try {
-            propertiesFile.getParentFile().mkdirs();
-            out = new FileOutputStream(propertiesFile);
-            if (properties == null) { properties = new Properties(); }
-            properties.store(out, "SpringBoot Vault Data");
+            dataFile.getParentFile().mkdirs();
+            out = new FileOutputStream(dataFile);
+            if (data == null) { data = new Properties(); }
+            data.store(out, "SpringBoot Vault Data");
 		}
 		catch (IOException e) {
 			Log.error(e, "Error saving vault.");
@@ -420,24 +357,25 @@ public class Vault {
 		if (value == null) {
 			return null;
 		}
-        if (publicKey == null) {
-            publicKey = loadPublicKey();
+        if (cert == null) {
+            cert = loadCertificate();
         }
-        if (publicKey == null) {
-            throw new VaultException("Missing public key. Have you initialized the vault?");
+        if (cert == null) {
+            throw new VaultException("Cannot encrypt input data. Missing certificate: "+certFile);
         }
         try {
-			Cipher cipher = Cipher.getInstance(algorithm);
-            cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+			Cipher cipher = Cipher.getInstance(keyType);
+            cipher.init(Cipher.ENCRYPT_MODE, cert.getPublicKey());
             byte[] buf = value.getBytes(UTF8);
             byte[] encrypted = cipher.doFinal(buf);
-			String hexcrypted = toHexString(encrypted);
-            return String.format("{encrypted:%s}", hexcrypted);
+			String hexcrypted = getEncoder().encodeToString(encrypted);
+            return String.format("${encrypted:%s}", hexcrypted);
 		}
 		catch (GeneralSecurityException e) {
 			throw new VaultException(e, "Error encrypting value...");
 		}
 	}
+
 
     // Decodes hexadecimal string and decrypts the provided value using the build-in key.
     // Throws exception in case of failure.
@@ -456,39 +394,22 @@ public class Vault {
         if (value == null) {
             return null;
         }
-
-        // unwrap, if needed
-        Pattern p = Pattern.compile("\\{encrypted:([^\\}]+)\\}");
-        Matcher m = p.matcher(value );
-        if (!m.matches()) {
-            return value; // nope, not encrypted
+        if (key == null) {
+            key = loadPrivateKey();
         }
-
-        // yes, encrypted
-
-        if (privateKey == null) {
+        if (key == null) {
             throw new VaultException("No private key. Cannot decrypt value.");
         }
-
-        String hexcrypted = m.group(1);
         try {
-            Cipher cipher = Cipher.getInstance(algorithm);
-            cipher.init(Cipher.DECRYPT_MODE, privateKey);
-            byte[] encrypted = fromHexString(hexcrypted);
+            Cipher cipher = Cipher.getInstance(keyType);
+            cipher.init(Cipher.DECRYPT_MODE, key);
+            byte[] encrypted = getDecoder().decode(value);
             byte[] decrypted = cipher.doFinal(encrypted);
             return new String(decrypted, UTF8);
         }
         catch (GeneralSecurityException e) {
             throw new VaultException(e, "Error decrypting encoded value...");
         }
-    }
-
-    private byte[] fromHexString(String hexcrypted) {
-        return new BigInteger(hexcrypted, 16).toByteArray();
-	}
-
-	private String toHexString(byte[] bytes) {
-        return new BigInteger(bytes).toString(16);
     }
 
 }
