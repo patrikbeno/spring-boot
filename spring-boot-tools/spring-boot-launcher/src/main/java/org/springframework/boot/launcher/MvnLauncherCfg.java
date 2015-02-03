@@ -29,8 +29,11 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.boot.launcher.mvn.MvnArtifact;
+import org.springframework.boot.launcher.mvn.MvnLauncher;
+import org.springframework.boot.launcher.mvn.MvnRepository;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.util.StatusLine;
+import org.springframework.boot.launcher.vault.Vault;
 import org.springframework.boot.loader.Launcher;
 import org.springframework.boot.loader.util.SystemPropertyUtils;
 
@@ -182,10 +185,12 @@ public enum MvnLauncherCfg {
 	 */
 	update(false),
 
+	initVault(false),
+
     /**
      * repository ID
      */
-    repository,
+    repository("default"),
 
 	/**
 	 * URL of the remote (source) Maven repository. Defaults to local user repository:
@@ -206,16 +211,14 @@ public enum MvnLauncherCfg {
 	password,
 
     /**
-     * Saves used-provided credentials in local user's credentials store
-     * @see #credentials
+     * Saves used-provided credentials in a user's vault.
+	 * For credentials to be saved, a repository alias must be provided in addition to URL, username and password.
+	 * @see #repository
+	 * @see #url
+	 * @see #username
+	 * @see #password
      */
 	save(false),
-
-    credentials("${user.home}/.springboot/credentials.properties"),
-
-    useSystemVault(false),
-
-    initVault(false),
 
     /**
 	 * Maven artifact entrypoint URI in form {@code groupId:artifactId:version}. If
@@ -274,7 +277,7 @@ public enum MvnLauncherCfg {
 	 * Returns {@code true} if the property value is defined (i.e. not null)
 	 */
 	public boolean isDefined() {
-		return get() != null;
+		return System.getProperty(getPropertyName()) != null;
 	}
 
 	/**
@@ -320,7 +323,9 @@ public enum MvnLauncherCfg {
 	// /
 
 	static public void configure() {
-        Log.debug("Configuring SpringBoot MvnLauncher %s", Launcher.class.getPackage().getImplementationVersion());
+		String version = Launcher.class.getPackage().getImplementationVersion();
+
+		Log.debug("Configuring SpringBoot MvnLauncher %s", (version != null ? version : "(unknown version)"));
 
 		Properties props = properties(MvnLauncherCfg.defaults.get().split(","));
 
@@ -343,7 +348,24 @@ public enum MvnLauncherCfg {
 				}
 				Log.debug("- %-30s : %s", pname, value);
 			}
+		}
 
+
+
+		if (MvnLauncherCfg.repository.isDefined() && !MvnLauncherCfg.save.asBoolean()) {
+			MvnRepository repo = MvnRepository.forRepositoryId(MvnLauncherCfg.repository.get());
+			if (repo != null) {
+				MvnLauncherCfg.url.set(repo.getURI().toString());
+				MvnLauncherCfg.username.set(repo.getUserName());
+			}
+		}
+
+		// propagate defaults, if available
+		for (MvnLauncherCfg v : values()) {
+			String value = System.getProperty(v.getPropertyName());
+			if (value == null && v.dflt != null) {
+				System.getProperty(v.getPropertyName(), SystemPropertyUtils.resolvePlaceholders(v.dflt));
+			}
 		}
 
 		header = "MvnLauncher configuration:";
@@ -358,8 +380,8 @@ public enum MvnLauncherCfg {
 				}
 				String key = v.getPropertyName();
 				String value = (key.matches("(?i).*password.*"))
-						? "***"
-						: SystemPropertyUtils.resolvePlaceholders(v.asString()); // masking password; QDH solution
+						? "***" // masking password; QDH solution
+						: SystemPropertyUtils.resolvePlaceholders(v.asString());
 				Log.debug("- %-30s : %s", key, value);
 			}
 		}

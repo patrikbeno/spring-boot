@@ -12,10 +12,9 @@ public class MvnLauncherTest extends AbstractTest {
 
 	@Test
 	public void test() {
-		MvnLauncher launcher = new MvnLauncher();
-		ClassLoader cl = launcher.resolve(
-				new MvnArtifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT"),
-				Thread.currentThread().getContextClassLoader());
+		MvnArtifact artifact = new MvnArtifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
+		MvnLauncher launcher = new MvnLauncher(artifact);
+		ClassLoader cl = launcher.resolve(artifact, Thread.currentThread().getContextClassLoader());
 		Assert.assertNotNull(cl);
 
 		// warning: sadly, class loader keeps using all the artifacts, and cannot be explicitly released (gc'ed)
