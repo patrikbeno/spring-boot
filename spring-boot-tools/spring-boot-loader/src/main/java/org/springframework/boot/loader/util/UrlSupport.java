@@ -14,7 +14,7 @@ public class UrlSupport {
         registerUrlProtocolHandlers();
     }
 
-    static public void init() {}
+    static public void init() {} // make sure static{} is called
 
     /**
      * Register a {@literal 'java.protocol.handler.pkgs'} property so that a
