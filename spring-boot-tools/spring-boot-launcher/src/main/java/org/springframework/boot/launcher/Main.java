@@ -15,19 +15,24 @@
  */
 package org.springframework.boot.launcher;
 
-import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
-
-import java.util.LinkedList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import org.springframework.boot.launcher.mvn.Decryptable;
 import org.springframework.boot.launcher.mvn.MvnLauncher;
 import org.springframework.boot.launcher.mvn.MvnRepository;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.vault.Vault;
-import org.springframework.boot.loader.util.SystemPropertyUtils;
 import org.springframework.boot.loader.util.UrlSupport;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Scanner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Start class for MvnLauncher; {@code spring-boot-loader} is executable.
@@ -36,8 +41,8 @@ import org.springframework.boot.loader.util.UrlSupport;
 public class Main {
 
 	/**
-	 * Entry point. To override, just extend this class and define custom {@code main()}
-	 * implementation delegating to {@code new MyMain().launch(args);}
+	 * Application entry point. Delegates to {@code launch()}
+	 * @see #launch(String[])
 	 */
 	public static void main(String[] args) {
 		new Main().launch(args);
@@ -56,19 +61,26 @@ public class Main {
 
         MvnLauncherCfg.configure();
 
-		Vault.vault();
+//		if (MvnLauncherCfg.initVault.asBoolean()) {
+//			Vault.vault().init();
+//		}
 
         if (MvnLauncherCfg.save.asBoolean()) {
             saveCredentials();
+			Log.info("Vault updated; exiting. (You should not both update credentials and execute an application.)");
+			return;
         }
 
         if (!MvnLauncherCfg.artifact.isDefined()) {
-            Log.info("Usage: %s <groupId>:<artifactId>:<version>[:<packaging>[:<classifier>]] ...%n",
-                    getClass().getName());
-            System.exit(-1);
-        }
+			InputStream in = getClass().getResourceAsStream("README.txt");
+			Scanner scanner = new Scanner(in);
+			scanner.useDelimiter("\\Z");
+			String s = scanner.next();
+			System.out.println(s);
+			System.exit(-1);
+		}
 
-        new MvnLauncher().launch(args);
+        new MvnLauncher(MvnLauncherCfg.artifact.asMvnArtifact()).launch(args);
 	}
 
 	/**
@@ -127,11 +139,17 @@ public class Main {
         if (id == null || id.isEmpty()) {
             Log.error(null, "Rejecting to save credentials with empty repository ID (--%s)", MvnLauncherCfg.repository.getPropertyName());
         } else {
+			Log.info("Saving credentials for repository `%s`", id);
 			MvnRepository mvnrepo = new MvnRepository(
 					MvnLauncherCfg.repository.asString(),
 					MvnLauncherCfg.url.asURI(true),
 					MvnLauncherCfg.username.asString(),
-					MvnLauncherCfg.password.asString());
+					new Decryptable() {
+						@Override
+						public String getValue() {
+							return MvnLauncherCfg.password.asString();
+						}
+					});
 			mvnrepo.save();
         }
     }

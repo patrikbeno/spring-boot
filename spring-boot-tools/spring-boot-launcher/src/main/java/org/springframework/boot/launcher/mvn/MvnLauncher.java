@@ -33,7 +33,6 @@ import org.springframework.boot.loader.LaunchedURLClassLoader;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.JarFileArchive;
 
-import static org.springframework.boot.launcher.MvnLauncherCfg.artifact;
 import static org.springframework.boot.launcher.MvnLauncherCfg.debug;
 import static org.springframework.boot.launcher.MvnLauncherCfg.showClasspath;
 
@@ -54,10 +53,16 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 	 */
 	static public final String MF_DEPENDENCIES = "Spring-Boot-Dependencies";
 
+	private MvnArtifact artifact;
+
 	// if -DMvnLauncher.artifact is defined, its Start-Class overrides the value defined
 	// by this archive
 	// lazily resolved in #getArtifacts(MvnArtifact)
 	private String mainClass;
+
+	public MvnLauncher(MvnArtifact artifact) {
+		this.artifact = artifact;
+	}
 
 	@Override
 	protected String getMainClass() throws Exception {
@@ -66,7 +71,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 
 	@Override
 	protected List<Archive> getClassPathArchives() throws Exception {
-		return getClassPathArchives(MvnLauncherCfg.artifact.isDefined() ? MvnLauncherCfg.artifact.asMvnArtifact() : null);
+		return getClassPathArchives(artifact);
 	}
 
 	/**
@@ -108,17 +113,6 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
     }
 
     ///
-
-	/**
-	 * Entry point used by build plugin (Main-Class manifest attribute). This can be
-	 * overriden in build by specifying {@code launcherClass} parameter. Also, you may
-	 * want to skip this and use the generic launcher directly.
-	 * @param args
-	 * @see org.springframework.boot.launcher.Main
-	 */
-	static public void main(String[] args) {
-		new MvnLauncher().launch(args);
-	}
 
 	protected List<Archive> getClassPathArchives(MvnArtifact mvnartifact) throws Exception {
         return getClassPathArchives(mvnartifact, null);

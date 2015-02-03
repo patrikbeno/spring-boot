@@ -120,25 +120,43 @@ public class MvnRepositoryConnector {
 
         MvnRepository repository = null;
 
-        boolean useDefinedCredentials = MvnLauncherCfg.username.isDefined() && MvnLauncherCfg.password.isDefined();
+        final boolean useDefinedCredentials = MvnLauncherCfg.username.isDefined() && MvnLauncherCfg.password.isDefined();
 
-		if (MvnLauncherCfg.url.isDefined()) {
-			repository = new MvnRepository(
-					MvnLauncherCfg.repository.isDefined() ? MvnLauncherCfg.repository.asString() : "<undefined>",
-					MvnLauncherCfg.url.asURI(true),
-					useDefinedCredentials ? MvnLauncherCfg.username.asString() : null,
-					useDefinedCredentials ? MvnLauncherCfg.password.asString() : null
-			);
-		} else if (MvnLauncherCfg.repository.isDefined()) {
+		if (MvnLauncherCfg.repository.isDefined()) {
 			String id = MvnLauncherCfg.repository.asString();
 			repository = MvnRepository.forRepositoryId(id);
 			if (repository == null) {
 				throw new MvnLauncherException(String.format(
-						"No such repository: %s. Provide URL (and optional username and password). " +
+						"No such repository: %s. Provide URL (and optionally username and password). " +
 								"Consider saving the repository configuration using the --MvnLauncher.save=true option.",
 						id));
 			}
-		}
+		} else if (MvnLauncherCfg.url.isDefined()) {
+			repository = new MvnRepository(
+					MvnLauncherCfg.repository.isDefined() ? MvnLauncherCfg.repository.asString() : "default",
+					MvnLauncherCfg.url.asURI(true),
+					useDefinedCredentials ? MvnLauncherCfg.username.asString() : null,
+					new Decryptable() {
+						@Override
+						public String getValue() {
+							return useDefinedCredentials ? MvnLauncherCfg.password.asString() : null;
+						}
+					}
+			);
+		} else {
+            repository = new MvnRepository(
+                    MvnLauncherCfg.repository.get(),
+                    MvnLauncherCfg.url.asURI(true),
+                    MvnLauncherCfg.username.get(),
+                    new Decryptable() {
+                        @Override
+                        public String getValue() { return useDefinedCredentials ? MvnLauncherCfg.password.asString() : null;
+                        }
+                    }
+
+
+            );
+        }
         return repository;
     }
 

@@ -16,7 +16,9 @@
 package org.springframework.boot.launcher.mvn;
 
 import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.vault.Vault;
+import org.springframework.boot.launcher.vault.VaultPermission;
 
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -37,35 +39,37 @@ import java.net.URL;
 public class MvnRepository {
 
     static private final String P_URL           = "springboot.mvnlauncher.repository.%s.url";
-    static private final String P_CREDENTIALS   = "springboot.mvnlauncher.repository.%s.credentials";
+    static private final String P_USERNAME      = "springboot.mvnlauncher.repository.%s.username";
+    static private final String P_PASSWORD      = "springboot.mvnlauncher.repository.%s.password";
 
     static public MvnRepository forRepositoryId(String repositoryId) {
 
-        Vault vault = Vault.instance();
+        final Vault vault = Vault.instance();
 
         String purl = String.format(P_URL, repositoryId);
-        String pcredentials = String.format(P_CREDENTIALS, repositoryId);
+        String pusername = String.format(P_USERNAME, repositoryId);
+        final String ppassword = String.format(P_PASSWORD, repositoryId);
 
         String url = vault.getProperty(purl);
         if (url == null) { return null; }
 
-        String userinfo = vault.getProperty(pcredentials);
+        String username = vault.getProperty(pusername);
+        Decryptable password = new Decryptable() {
+            @Override
+            public String getValue() {
+                return vault.getProperty(ppassword);
+            }
+        };
 
-        if (userinfo == null) {
-            return new MvnRepository(repositoryId, URI.create(url), null, null);
-        }
-
-        String[] userpass = userinfo.split(":", 2);
-
-        return new MvnRepository(repositoryId, URI.create(url), userpass[0], userpass[1]);
+        return new MvnRepository(repositoryId, URI.create(url), username, password);
     }
 
     private String id;
 	private URI uri;
 	private String username;
-	private String password;
+	private Decryptable password;
 
-	public MvnRepository(String id, URI uri, String username, String password) {
+	public MvnRepository(String id, URI uri, String username, Decryptable password) {
         this.id = id;
         this.uri = uri;
         this.username = username;
@@ -84,8 +88,9 @@ public class MvnRepository {
 		return username;
 	}
 
-	String getPassword() {
-		return password;
+	public String getPassword() {
+        VaultPermission.READ_PERMISSION.check();
+        return password.getValue();
 	}
 
 	boolean hasPassword() {
@@ -103,12 +108,35 @@ public class MvnRepository {
     ///
 
     public void save() {
+        if (username == null) {
+            Log.info("Username is unspecified. Repository `%s` will be saved without credentials", id);
+        }
+        if (username != null && password == null) {
+            Log.error(null, "Rejecting to save credentials with empty password. Repository: `%s`, username: `%s`", id, username);
+            throw new MvnLauncherException("Missing password");
+        }
+
         Vault vault = Vault.instance();
+
         String purl = String.format(P_URL, id);
-        String pcredentials = String.format(P_CREDENTIALS, id);
-        vault.setProperty(purl, uri.toASCIIString(), false);
-        vault.setProperty(pcredentials, String.format("%s:%s", username, password), true);
+        String pusername = String.format(P_USERNAME, id);
+        String ppassword = String.format(P_PASSWORD, id);
+
+        vault.setProperty(purl, uri.toASCIIString());
+        vault.setProperty(pusername, username);
+        vault.setEncryptedProperty(ppassword, password.getValue());
+
         vault.save();
     }
 
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("MvnRepository{");
+        sb.append("id='").append(id).append('\'');
+        sb.append(", uri=").append(uri);
+        sb.append(", username='").append(username).append('\'');
+        sb.append(", password='").append(password).append('\'');
+        sb.append('}');
+        return sb.toString();
+    }
 }
