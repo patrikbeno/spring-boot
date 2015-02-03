@@ -147,8 +147,9 @@ public abstract class Launcher {
 			throw new IllegalStateException("Unable to determine code source archive");
 		}
 //		System.out.println(path);
-		path = path.replaceFirst("^file:/(.*)!/", "$1");
+		path = path.replaceFirst("^file:(.*)!/", "$1");
 		File root = new File(path);
+//		System.out.println(root);
 		if (!root.exists()) {
 			throw new IllegalStateException(
 					"Unable to determine code source archive from " + root);
