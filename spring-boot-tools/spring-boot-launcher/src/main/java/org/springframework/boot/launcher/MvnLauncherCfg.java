@@ -185,8 +185,6 @@ public enum MvnLauncherCfg {
 	 */
 	update(false),
 
-	initVault(false),
-
     /**
      * repository ID
      */
@@ -228,6 +226,9 @@ public enum MvnLauncherCfg {
 	 * MvnLauncher as generic repo-based application launcher.
 	 */
 	artifact,
+
+    resolvers("50"),
+    downloads("10"),
 
 	;
 
@@ -294,6 +295,10 @@ public enum MvnLauncherCfg {
 
 	public boolean asBoolean() {
 		return Boolean.parseBoolean(asString());
+	}
+
+	public int asInt() {
+		return Integer.parseInt(asString());
 	}
 
 	public long asLong() {

@@ -28,7 +28,7 @@ public class MvnLauncherException extends RuntimeException {
 		super(cause);
 	}
 
-	public MvnLauncherException(Throwable cause, String message) {
-		super(message, cause);
+	public MvnLauncherException(Throwable cause, String message, Object ... args) {
+		super(String.format(message, args), cause);
 	}
 }
