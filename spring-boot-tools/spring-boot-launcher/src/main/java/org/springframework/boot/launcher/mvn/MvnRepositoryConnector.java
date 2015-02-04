@@ -31,6 +31,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Scanner;
 import java.util.UUID;
@@ -39,6 +40,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -65,11 +67,22 @@ public class MvnRepositoryConnector {
 
 	// MvnLauncherCredentialStore store;
 
-	/**
-	 * Temporary executor for used to asynchronously download artifacts
-	 * @see #close()
-	 */
-	ExecutorService executor = Executors.newFixedThreadPool(1);
+    ThreadGroup group = new ThreadGroup(getClass().getSimpleName());
+
+	ExecutorService resolvers = Executors.newFixedThreadPool(MvnLauncherCfg.resolvers.asInt(), new ThreadFactory() {
+        int counter;
+        @Override
+        public Thread newThread(Runnable r) {
+            return new Thread(group, r, "MvnLauncher-resolver-"+(++counter));
+        }
+    });
+	ExecutorService downloads = Executors.newFixedThreadPool(MvnLauncherCfg.downloads.asInt(), new ThreadFactory() {
+        int counter;
+        @Override
+        public Thread newThread(Runnable r) {
+            return new Thread(group, r, "MvnLauncher-download-"+(++counter));
+        }
+    });
 
 	DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 	XPathFactory xpf = XPathFactory.newInstance();
@@ -165,9 +178,11 @@ public class MvnRepositoryConnector {
 	 * Close & release executor
 	 */
 	public void close() {
-		executor.shutdownNow();
-		executor = null;
-	}
+        downloads.shutdownNow();
+        downloads = null;
+        resolvers.shutdownNow();
+        resolvers = null;
+    }
 
 	/**
 	 * Attempts to resolve given artifacts: each artifact's remote file is downloaded or
@@ -188,44 +203,56 @@ public class MvnRepositoryConnector {
 
 		Log.debug("Dependencies (alphabetical):");
 
-		int size = 0;
-		int downloaded = 0;
-		int errors = 0;
-		int warnings = 0;
-        int counter = 0;
+        List<Callable<MvnArtifact>> tasks = new LinkedList<Callable<MvnArtifact>>();
 
-		for (MvnArtifact ma : sorted) {
-            counter++;
+		for (final MvnArtifact ma : sorted) {
+            tasks.add(new Callable<MvnArtifact>() {
+                @Override
+                public MvnArtifact call() throws Exception {
+//                    Log.debug("Resolving %s", ma.asString());
+                    resolve(ma);
+//                    Log.debug("Resolved %s", ma.asString());
+                    return ma;
+                }
+            });
+		}
 
-			if (ma == null) { continue; }
+        int size = 0;
+        int downloaded = 0;
+        int errors = 0;
+        int warnings = 0;
+        int requests = 0;
 
-            StatusLine.push("Resolving (%d/%d) %s", counter, sorted.size(), ma);
-            try {
-                // resolve it (main job). This will update $ma
-                File f = resolve(ma);
+        try {
+            List<Future<MvnArtifact>> futures = resolvers.invokeAll(tasks);
 
+            for (Future<MvnArtifact> f : futures) {
+                MvnArtifact ma = f.get();
+                Log.debug("- %-15s: %s (%s KB, %d requests)",
+                        ma.getStatus(), ma,
+                        ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : "?");
                 // update some stats
                 if (ma.isError()) { errors++; }
                 if (ma.isWarning()) { warnings++; }
-                if (f.exists()) {
-                    size += f.length();
-                    switch (ma.getStatus()) {
-                        case Downloaded:
-                        case Updated:
-                            downloaded += ma.getFile().length();
-                    }
+                if (ma.getFile().exists()) {
+                    size += ma.getFile().length();
                 }
-            } finally {
-                StatusLine.pop();
+                downloaded += ma.downloaded;
+                requests += ma.requests;
             }
-		}
 
-		// if enabled, print some final report
+        } catch (InterruptedException e) {
+            throw new UnsupportedOperationException(e);
+        } catch (ExecutionException e) {
+            throw new UnsupportedOperationException(e);
+        }
+
+        // if enabled, print some final report
 		if (!quiet.asBoolean()) {
 			long elapsed = System.currentTimeMillis() - started;
 			Log.info(String.format(
-                    "Summary: %d archives, %d KB total (resolved in %d msec, downloaded: %s KB). Warnings/Errors: %d/%d.",
-                    artifacts.size(), size / 1024, elapsed, downloaded / 1024,
+                    "Summary: %d archives, %d KB total (resolved in %d msec, downloaded: %d KB in %d requests). Warnings/Errors: %d/%d.",
+                    artifacts.size(), size / 1024, elapsed, downloaded / 1024, requests,
                     warnings, errors));
 		}
 
@@ -368,30 +395,19 @@ public class MvnRepositoryConnector {
 		}
 	}
 
-	void download(MvnArtifact artifact, final URLConnection con, final File file) throws IOException {
-        StatusLine.push("Downloading");
+	void download(final MvnArtifact artifact, final URLConnection con, final File file) throws IOException {
+        file.getParentFile().mkdirs();
+        InputStream in = null;
         try {
-            file.getParentFile().mkdirs();
-            long size = con.getContentLengthLong();
-            Future<?> future = executor.submit(new Callable<Object>() {
-                @Override
-                public Object call() throws Exception {
-                    InputStream in = null;
-                    try {
-                        in = con.getInputStream();
-                        Files.copy(in, file.toPath());
-                        return null;
-                    }
-                    finally {
-                        if (in != null) try { in.close(); } catch (IOException ignore) {}
-                    }
-                }
-            });
-            monitorDownloadProgress(con, artifact, future, file, size);
-        } finally {
-            StatusLine.pop();
+            in = con.getInputStream();
+            Files.copy(in, file.toPath());
+            artifact.downloaded += file.length();
         }
-	}
+        finally {
+            if (in != null) try { in.close(); } catch (IOException ignore) {}
+            artifact.requests++;
+        }
+    }
 
 	void commit(File tmp, File dst, long lastModified) {
 		try {
@@ -505,6 +521,7 @@ public class MvnRepositoryConnector {
 			// metadata
 			URLConnection metadata = update ? urlcon(murl) : null;
 			long lastModified = update ? metadata.getLastModified() : mfile.lastModified();
+            if (update) artifact.requests++;
 
 			// is our local copy up to date?
 			boolean recent = mfile.exists() && mfile.lastModified() >= lastModified;

@@ -48,8 +48,7 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 	}
 
 
-	private String resolvedSnapshotVersion; // e.g. 1.0-SNAPSHOT (logical) ->
-	// 1.0.20140131.123456 (timestamped)
+	private String resolvedSnapshotVersion; // e.g. 1.0-SNAPSHOT (logical) -> 1.0.20140131.123456 (timestamped)
 
 	private Status status; // resolution status
 
@@ -58,6 +57,9 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 	private File file; // cached
 
 	private Throwable error; // resolver error, if any (for reporting purposes)
+
+    public long downloaded;
+    public int requests;
 
 
 	protected MvnArtifact(String groupId, String artifactId, String version, String type, String classifier) {
