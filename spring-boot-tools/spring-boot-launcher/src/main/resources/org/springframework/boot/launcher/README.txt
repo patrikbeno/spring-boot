@@ -46,11 +46,9 @@ Hint:
   For non-default repository, specify also `--MvnLauncher.repository=<ID>`.
   Once configured, you can switch between repositories using `--MvnLauncher.repository=<ID>` option.
 Generate Certificate and Private Key:
-  $ cd ~/.springboot
-  $ subject="/CN=MyCommonName/OU=MyDepartment/O=MyOrganization/L=MyLocation/C=US"
-  $ openssl genrsa -out vault.key
-  $ openssl req -new -key vault.key -out vault.csr -subj $subject
-  $ openssl req -new -x509 -key vault.key -out vault.crt -days 1095 -subj $subject
+  $ subject="/CN=$(whoami)@$(hostname)/OU=MyDepartment/O=MyOrganization/L=MyLocation/C=US"
+  $ openssl genrsa | openssl pkcs8 -topk8 -nocrypt -out ~/.springboot/vault.key
+  $ openssl req -new -x509 -days 1095 -subj "$subject" -key ~/.springboot/vault.key -out ~/.springboot/vault.crt
 
 
 
