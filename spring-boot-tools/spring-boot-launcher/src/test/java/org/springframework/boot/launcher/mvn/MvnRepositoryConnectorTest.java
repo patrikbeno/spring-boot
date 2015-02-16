@@ -14,10 +14,15 @@ public class MvnRepositoryConnectorTest extends AbstractTest {
 	@Test
 	public void test() {
 		MvnArtifact a = new MvnArtifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
-		MvnRepositoryConnector c = new MvnRepositoryConnector();
-		c.resolveSnapshotVersion(a);
-		File f = c.resolve(a);
-		Assert.assertNotNull(f);
-	}
+        MvnRepositoryConnectorContext context = new MvnRepositoryConnectorContext();
+        try {
+            MvnRepositoryConnector c = new MvnRepositoryConnector(MvnRepository.forRepositoryId("default"), context, null);
+            c.resolveSnapshotVersion(a);
+            File f = c.resolve(a);
+            Assert.assertNotNull(f);
+        } finally {
+            context.close();
+        }
+    }
 
 }

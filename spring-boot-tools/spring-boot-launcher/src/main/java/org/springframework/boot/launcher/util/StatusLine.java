@@ -2,6 +2,7 @@ package org.springframework.boot.launcher.util;
 
 import org.springframework.boot.launcher.MvnLauncherCfg;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 
 /**
@@ -53,7 +54,7 @@ public class StatusLine {
         if (!MvnLauncherCfg.statusLine.asBoolean()) { return; }
         synchronized (System.out) {
             resetLine();
-            for (Message m : status) {
+            for (Message m : new ArrayList<Message>(status)) {
                 System.out.printf("> %s ", m);
             }
         }

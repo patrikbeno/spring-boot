@@ -17,11 +17,14 @@ package org.springframework.boot.launcher.mvn;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 import java.util.jar.Manifest;
 
 import org.springframework.boot.launcher.MvnLauncherCfg;
@@ -120,8 +123,10 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 
 	protected List<Archive> getClassPathArchives(MvnArtifact mvnartifact, List<MvnArtifact> ext) throws Exception {
 
-        MvnRepositoryConnector connector = new MvnRepositoryConnector();
+        MvnRepositoryConnectorContext context = new MvnRepositoryConnectorContext();
         try {
+            MvnRepositoryConnector connector = buildMvnRepositoryConnector(context);
+
             // get list of dependencies from external root artifact (if defined), or
             // current archive (default)
             List<MvnArtifact> artifacts = (mvnartifact != null) ? getArtifacts(connector, mvnartifact) : getArtifacts();
@@ -155,9 +160,8 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
             }
 
             return archives;
-        }
-        finally {
-            connector.close();
+        } finally {
+            context.close();
             StatusLine.resetLine();
         }
     }
@@ -251,4 +255,34 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 		}
 		return result;
 	}
+
+    MvnRepositoryConnector buildMvnRepositoryConnector(MvnRepositoryConnectorContext context) {
+
+        InputStream in = null;
+        try {
+            Properties system = System.getProperties();
+            in = getClass().getResourceAsStream("repo-defaults.properties");
+            Properties defaults = new Properties();
+            defaults.load(in);
+            Enumeration<?> names = defaults.propertyNames();
+            while (names.hasMoreElements()) {
+                String name = (String) names.nextElement();
+                if (!system.containsKey(name)) {
+                    system.setProperty(name, defaults.getProperty(name));
+                }
+            }
+        } catch (IOException ignore) {
+        } finally {
+            if (in != null) try { in.close(); } catch (IOException ignore) {}
+        }
+
+        List<String> ids = MvnLauncherCfg.repositories.asList();
+        Collections.reverse(ids);
+        MvnRepositoryConnector connector = null;
+        for (String id : ids) {
+            MvnRepository repo = MvnRepository.forRepositoryId(id);
+            connector = new MvnRepositoryConnector(repo, context, connector);
+        }
+        return connector;
+    }
 }

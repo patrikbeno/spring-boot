@@ -98,7 +98,7 @@ public class Vault {
                 resolvePlaceholders(SYSTEM_CERT_TYPE),
                 new File(resolvePlaceholders(SYSTEM_KEY_FILE)),
                 resolvePlaceholders(SYSTEM_KEY_TYPE),
-                null);
+                null, System.getProperties());
     }
 
     static private Vault userVault() {
@@ -108,7 +108,7 @@ public class Vault {
                 resolvePlaceholders(USER_CERT_TYPE),
                 new File(resolvePlaceholders(USER_KEY_FILE)),
                 resolvePlaceholders(USER_KEY_TYPE),
-                systemVault());
+                systemVault(), null);
     }
 
     // private key
@@ -124,17 +124,19 @@ public class Vault {
     // data
     private File dataFile;
     private Properties data;
+    private Properties defaults;
 
     // link to parent vault, usually system-scoped
     private Vault parent;
 
-    private Vault(File dataFile, File certFile, String certType, File keyFile, String keyType, Vault parent) {
+    private Vault(File dataFile, File certFile, String certType, File keyFile, String keyType, Vault parent, Properties defaults) {
         this.keyFile = keyFile;
         this.keyType = keyType;
         this.certFile = certFile;
         this.certType = certType;
         this.dataFile = dataFile;
         this.parent = parent;
+        this.defaults = defaults;
     }
 
     ///
@@ -287,12 +289,12 @@ public class Vault {
      */
     private Properties loadProperties() {
         if (!dataFile.exists()) {
-            return new Properties();
+            return new Properties(defaults);
         }
         InputStream in = null;
         try {
             in = new BufferedInputStream(new FileInputStream(dataFile));
-            Properties props = new Properties();
+            Properties props = new Properties(defaults);
             props.load(in);
             return props;
         } catch (IOException e) {

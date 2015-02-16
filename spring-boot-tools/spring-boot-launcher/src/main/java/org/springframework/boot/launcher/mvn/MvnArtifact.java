@@ -54,6 +54,8 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 
 	private URL source; // origin
 
+    private String repositoryId;
+
 	private File file; // cached
 
 	private Throwable error; // resolver error, if any (for reporting purposes)
@@ -97,7 +99,15 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 		return source;
 	}
 
-	public void setFile(File file) {
+    public String getRepositoryId() {
+        return repositoryId;
+    }
+
+    public void setRepositoryId(String repositoryId) {
+        this.repositoryId = repositoryId;
+    }
+
+    public void setFile(File file) {
 		this.file = file;
 	}
 

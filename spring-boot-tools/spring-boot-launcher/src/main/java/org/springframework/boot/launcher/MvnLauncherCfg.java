@@ -25,6 +25,8 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -185,16 +187,15 @@ public enum MvnLauncherCfg {
 	 */
 	update(false),
 
-    /**
-     * repository ID
-     */
-    repository("default"),
+    repositories("jrevolt,central"),
 
 	/**
 	 * URL of the remote (source) Maven repository. Defaults to local user repository:
 	 * ${user.home}/.m2/repository
+     * main: https://github.com/patrikbeno/spring-boot/raw/MvnLauncherDist/
+     * fallback: http://repo1.maven.org/maven2
 	 */
-	url("file:///${user.home}/.m2/repository/"),
+	url("http://repo1.maven.org/maven2"),
 
 	/**
 	 * Remote repository authentication (username). Only basic authentication is supported
@@ -293,6 +294,10 @@ public enum MvnLauncherCfg {
 		return resolvePlaceholders(get());
 	}
 
+    public List<String> asList() {
+        return Arrays.asList(asString().split(","));
+    }
+
 	public boolean asBoolean() {
 		return Boolean.parseBoolean(asString());
 	}
@@ -352,16 +357,6 @@ public enum MvnLauncherCfg {
 					header = null;
 				}
 				Log.debug("- %-30s : %s", pname, value);
-			}
-		}
-
-
-
-		if (MvnLauncherCfg.repository.isDefined() && !MvnLauncherCfg.save.asBoolean()) {
-			MvnRepository repo = MvnRepository.forRepositoryId(MvnLauncherCfg.repository.get());
-			if (repo != null) {
-				MvnLauncherCfg.url.set(repo.getURI().toString());
-				MvnLauncherCfg.username.set(repo.getUserName());
 			}
 		}
 

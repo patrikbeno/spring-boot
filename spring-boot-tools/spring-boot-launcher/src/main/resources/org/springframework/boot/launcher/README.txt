@@ -50,7 +50,3 @@ Generate Certificate and Private Key:
   $ openssl genrsa | openssl pkcs8 -topk8 -nocrypt -out ~/.springboot/vault.key
   $ subject="/CN=$(whoami)@$(hostname)/OU=MyDepartment/O=MyOrganization/L=MyLocation/C=US"
   $ openssl req -new -x509 -days 1095 -subj "$subject" -key ~/.springboot/vault.key -out ~/.springboot/vault.crt
-
-
-
-

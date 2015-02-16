@@ -15,8 +15,15 @@
  */
 package org.springframework.boot.launcher.mvn;
 
-import static org.springframework.boot.launcher.MvnLauncherCfg.*;
+import org.springframework.boot.launcher.MvnLauncherCfg;
+import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.util.Log;
+import org.springframework.boot.launcher.util.StatusLine;
+import org.w3c.dom.Document;
 
+import javax.xml.bind.DatatypeConverter;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.xpath.XPath;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -37,58 +44,28 @@ import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import javax.xml.bind.DatatypeConverter;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathFactory;
-
-import org.springframework.boot.launcher.MvnLauncherCfg;
-import org.springframework.boot.launcher.MvnLauncherException;
-import org.springframework.boot.launcher.util.Log;
-import org.springframework.boot.launcher.util.StatusLine;
-import org.w3c.dom.Document;
 
 /**
  * @author Patrik Beno
  */
 public class MvnRepositoryConnector {
 
-	MvnRepository repository = resolveRepository();
+    MvnRepository repository;
 
-	File cache = MvnLauncherCfg.cache.asFile();
+    MvnRepositoryConnector parent;
 
-	// MvnLauncherCredentialStore store;
-
-    ThreadGroup group = new ThreadGroup(getClass().getSimpleName());
-
-	ExecutorService resolvers = Executors.newFixedThreadPool(MvnLauncherCfg.resolvers.asInt(), new ThreadFactory() {
-        int counter;
-        @Override
-        public Thread newThread(Runnable r) {
-            return new Thread(group, r, "MvnLauncher-resolver-"+(++counter));
-        }
-    });
-	ExecutorService downloads = Executors.newFixedThreadPool(MvnLauncherCfg.downloads.asInt(), new ThreadFactory() {
-        int counter;
-        @Override
-        public Thread newThread(Runnable r) {
-            return new Thread(group, r, "MvnLauncher-download-"+(++counter));
-        }
-    });
-
-	DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-	XPathFactory xpf = XPathFactory.newInstance();
+    MvnRepositoryConnectorContext context;
 
 	boolean connectionVerified = MvnLauncherCfg.offline.asBoolean();
 
+    public MvnRepositoryConnector(MvnRepository repository, MvnRepositoryConnectorContext context, MvnRepositoryConnector parent) {
+        this.repository = repository;
+        this.context = context;
+        this.parent = parent;
+    }
 
     /**
 	 * If the connection to repository seems invalid, throw an exception
@@ -96,92 +73,41 @@ public class MvnRepositoryConnector {
 	void verifyConnection() {
 		if (connectionVerified) { return; }
 
-        // check http:// and https:// repositories: must be able to connect successfully
-        if (repository.getURL().getProtocol().matches("https?")) {
-            try {
-				StatusLine.push("Verifying connection to %s", repository.getURL().getHost());
-                URLConnection con = urlcon(repository.getURL(), false);
-                con.setConnectTimeout(1000);
-                con.connect();
+        synchronized (this) {
+            if (connectionVerified) { return; }
+
+            // check http:// and https:// repositories: must be able to connect successfully
+            if (repository.getURL().getProtocol().matches("https?")) {
+                try {
+                    StatusLine.push("Verifying connection to %s", repository.getURL().getHost());
+                    URLConnection con = urlcon(repository.getURL(), false);
+                    con.setConnectTimeout(1000);
+                    con.connect();
+                    connectionVerified = true;
+                }
+                catch (IOException e) {
+                    throw new MvnLauncherException(e, "Invalid or misconfigured repository " + repository.getURL());
+                }
+                finally {
+                    StatusLine.pop();
+                }
+
+                // verify file:// repositories: directory must exist
+            }
+            else if (repository.getURL().getProtocol().equals("file")) {
+                File f = new File(repository.getURL().getPath());
+                connectionVerified = f.exists();
+                if (!f.exists()) {
+                    throw new MvnLauncherException("Invalid repository: " + MvnLauncherCfg.url.asString());
+                }
+
+                // unknown / unrecognized protocol
+            }
+            else {
+                Log.debug("Cannot verify protocol %s://. Good luck!", repository.getURL().getProtocol());
                 connectionVerified = true;
             }
-            catch (IOException e) {
-                throw new MvnLauncherException(e, "Invalid or misconfigured repository " + url);
-            }
-			finally {
-				StatusLine.pop();
-			}
-
-            // verify file:// repositories: directory must exist
         }
-        else if (repository.getURL().getProtocol().equals("file")) {
-            File f = new File(repository.getURL().getPath());
-            connectionVerified = f.exists();
-            if (!f.exists()) {
-                throw new MvnLauncherException("Invalid repository: " + MvnLauncherCfg.url.asString());
-            }
-
-            // unknown / unrecognized protocol
-        }
-        else {
-            Log.debug("Cannot verify protocol %s://. Good luck!", repository.getURL().getProtocol());
-            connectionVerified = true;
-        }
-    }
-
-    private MvnRepository resolveRepository() {
-
-        MvnRepository repository = null;
-
-        final boolean useDefinedCredentials = MvnLauncherCfg.username.isDefined() && MvnLauncherCfg.password.isDefined();
-
-		if (MvnLauncherCfg.repository.isDefined()) {
-			String id = MvnLauncherCfg.repository.asString();
-			repository = MvnRepository.forRepositoryId(id);
-			if (repository == null) {
-				throw new MvnLauncherException(String.format(
-						"No such repository: %s. Provide URL (and optionally username and password). " +
-								"Consider saving the repository configuration using the --MvnLauncher.save=true option.",
-						id));
-			}
-		} else if (MvnLauncherCfg.url.isDefined()) {
-			repository = new MvnRepository(
-					MvnLauncherCfg.repository.isDefined() ? MvnLauncherCfg.repository.asString() : "default",
-					MvnLauncherCfg.url.asURI(true),
-					useDefinedCredentials ? MvnLauncherCfg.username.asString() : null,
-					new Decryptable() {
-						@Override
-						public String getValue() {
-							return useDefinedCredentials ? MvnLauncherCfg.password.asString() : null;
-						}
-					}
-			);
-		} else {
-            repository = new MvnRepository(
-                    MvnLauncherCfg.repository.get(),
-                    MvnLauncherCfg.url.asURI(true),
-                    MvnLauncherCfg.username.get(),
-                    new Decryptable() {
-                        @Override
-                        public String getValue() { return useDefinedCredentials ? MvnLauncherCfg.password.asString() : null;
-                        }
-                    }
-
-
-            );
-        }
-        return repository;
-    }
-
-
-    /**
-	 * Close & release executor
-	 */
-	public void close() {
-        downloads.shutdownNow();
-        downloads = null;
-        resolvers.shutdownNow();
-        resolvers = null;
     }
 
 	/**
@@ -209,9 +135,11 @@ public class MvnRepositoryConnector {
             tasks.add(new Callable<MvnArtifact>() {
                 @Override
                 public MvnArtifact call() throws Exception {
-//                    Log.debug("Resolving %s", ma.asString());
                     resolve(ma);
-//                    Log.debug("Resolved %s", ma.asString());
+                    switch (ma.getStatus()) {
+                        case NotFound:
+                            if (parent != null) { parent.resolve(ma); }
+                    }
                     return ma;
                 }
             });
@@ -224,13 +152,14 @@ public class MvnRepositoryConnector {
         int requests = 0;
 
         try {
-            List<Future<MvnArtifact>> futures = resolvers.invokeAll(tasks);
+            List<Future<MvnArtifact>> futures = context.resolvers.invokeAll(tasks);
 
             for (Future<MvnArtifact> f : futures) {
                 MvnArtifact ma = f.get();
-                Log.debug("- %-15s: %s (%s KB, %d requests)",
+                Log.debug("- %-15s: %s (%s KB @%s)",
                         ma.getStatus(), ma,
-                        ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : "?");
+                        ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : "?",
+                        ma.getRepositoryId());
                 // update some stats
                 if (ma.isError()) { errors++; }
                 if (ma.isWarning()) { warnings++; }
@@ -248,7 +177,7 @@ public class MvnRepositoryConnector {
         }
 
         // if enabled, print some final report
-		if (!quiet.asBoolean()) {
+		if (!MvnLauncherCfg.quiet.asBoolean()) {
 			long elapsed = System.currentTimeMillis() - started;
 			Log.info(String.format(
                     "Summary: %d archives, %d KB total (resolved in %d msec, downloaded: %d KB in %d requests). Warnings/Errors: %d/%d.",
@@ -290,7 +219,7 @@ public class MvnRepositoryConnector {
 		}
 
 		// if the source is file://, there's no point caching it (unless forced)
-		if (repository.getURL().getProtocol().equals("file") && !cacheFileProtocol.asBoolean()) {
+		if (repository.getURL().getProtocol().equals("file") && !MvnLauncherCfg.cacheFileProtocol.asBoolean()) {
 			try {
 				URL url = new URL(repository.getURL(), artifact.getPath());
 				return resource(artifact, MvnArtifact.Status.Cached, url, new File(url.getPath()), null);
@@ -302,13 +231,13 @@ public class MvnRepositoryConnector {
 
 		try {
 			// target file in cache
-			final File f = new File(cache, artifact.getPath());
+			final File f = new File(context.cache, artifact.getPath());
 			final File fLastUpdated = getLastUpdatedMarkerFile(f);
 			final boolean expired = isExpired(fLastUpdated);
 
 			// in offline mode, artifact is either available or not; we're not doing
 			// anything about it
-			if (offline.asBoolean()) {
+			if (MvnLauncherCfg.offline.asBoolean()) {
 				return resource(
                         artifact,
                         f.exists() ? MvnArtifact.Status.Offline : MvnArtifact.Status.NotFound,
@@ -318,9 +247,9 @@ public class MvnRepositoryConnector {
 
 			// should we try to update the file?
 			boolean update = MvnLauncherCfg.update.asBoolean()
-					|| (artifact.isSnapshot() && updateSnapshots.asBoolean() && expired)
-					|| (artifact.isRelease() && updateReleases.asBoolean() && expired);
-			boolean nocache = ignoreCache.asBoolean();
+					|| (artifact.isSnapshot() && MvnLauncherCfg.updateSnapshots.asBoolean() && expired)
+					|| (artifact.isRelease() && MvnLauncherCfg.updateReleases.asBoolean() && expired);
+			boolean nocache = MvnLauncherCfg.ignoreCache.asBoolean();
 
 			// file is in cache already and update is disabled
 			if (f.exists() && !update && !nocache) {
@@ -348,7 +277,7 @@ public class MvnRepositoryConnector {
 				download(artifact, con, tmp);
 
 				// verify the checksum; report the errors if enabled
-				if (verify.asBoolean() && !verify(tmp, url)) {
+				if (MvnLauncherCfg.verify.asBoolean() && !verify(tmp, url)) {
 					// invalid, drop it & report
 					Files.delete(tmp.toPath());
 					return resource(artifact, MvnArtifact.Status.Invalid, url, null, null);
@@ -474,6 +403,7 @@ public class MvnRepositoryConnector {
 	File resource(MvnArtifact artifact, MvnArtifact.Status status, URL source, File file, Throwable error) {
 		artifact.setStatus(status);
 		artifact.setSource(source);
+        artifact.setRepositoryId(repository.getId());
 		artifact.setFile(file);
 		if (error != null && artifact.getError() == null) { artifact.setError(error); }
 
@@ -492,10 +422,6 @@ public class MvnRepositoryConnector {
 			throw new AssertionError(status);
 		}
 
-		Log.debug("- %-15s: %s (%s KB)",
-                artifact.getStatus(), artifact,
-				artifact.getFile() != null && artifact.getFile().exists() ? artifact.getFile().length() / 1024 : "?");
-
 		return artifact.getFile();
 	}
 
@@ -508,15 +434,15 @@ public class MvnRepositoryConnector {
 			// metadata: remote URL and cached local file
 			URL url = new URL(repository.getURL(), artifact.getPath());
 			URL murl = new URL(url, "maven-metadata.xml");
-			File mfile = new File(new File(cache, artifact.getPath()).getParentFile(), "maven-metadata.xml");
+			File mfile = new File(new File(context.cache, artifact.getPath()).getParentFile(), "maven-metadata.xml");
 			File fLastUpdated = getLastUpdatedMarkerFile(mfile);
 
 			final boolean expired = isExpired(fLastUpdated);
 
 			// should we try and update?
 			boolean update = MvnLauncherCfg.update.asBoolean()
-                    || (updateSnapshots.asBoolean() && expired
-                    || ignoreCache.asBoolean());
+                    || (MvnLauncherCfg.updateSnapshots.asBoolean() && expired
+                    || MvnLauncherCfg.ignoreCache.asBoolean());
 
 			// metadata
 			URLConnection metadata = update ? urlcon(murl) : null;
@@ -567,9 +493,9 @@ public class MvnRepositoryConnector {
 	 */
 	String getSnapshotVersionFromMetadata(File file) {
 		try {
-			DocumentBuilder db = dbf.newDocumentBuilder();
+			DocumentBuilder db = context.dbf.newDocumentBuilder();
 			Document doc = db.parse(file);
-			XPath xpath = xpf.newXPath();
+			XPath xpath = context.xpf.newXPath();
 			String version = String.format("%s-%s",
 					xpath.evaluate("//versioning/snapshot/timestamp", doc),
 					xpath.evaluate("//versioning/snapshot/buildNumber", doc));
