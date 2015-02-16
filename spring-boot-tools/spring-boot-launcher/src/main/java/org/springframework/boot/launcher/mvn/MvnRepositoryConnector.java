@@ -295,7 +295,9 @@ public class MvnRepositoryConnector {
 			}
 			catch (FileNotFoundException e) {
 				// nope
-				return resource(artifact, MvnArtifact.Status.NotFound, repository.getURL(), f, e);
+				return parent != null
+                        ? parent.resolve(artifact)
+                        : resource(artifact, MvnArtifact.Status.NotFound, repository.getURL(), f, e);
 			}
 
 		}
