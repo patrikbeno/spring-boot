@@ -91,16 +91,6 @@ public class Vault {
         return store;
 	}
 
-    static private Vault systemVault() {
-        return new Vault(
-                new File(resolvePlaceholders(SYSTEM_DATA_FILE)),
-                new File(resolvePlaceholders(SYSTEM_CERT_FILE)),
-                resolvePlaceholders(SYSTEM_CERT_TYPE),
-                new File(resolvePlaceholders(SYSTEM_KEY_FILE)),
-                resolvePlaceholders(SYSTEM_KEY_TYPE),
-                null, System.getProperties());
-    }
-
     static private Vault userVault() {
         return new Vault(
                 new File(resolvePlaceholders(USER_DATA_FILE)),
@@ -108,7 +98,17 @@ public class Vault {
                 resolvePlaceholders(USER_CERT_TYPE),
                 new File(resolvePlaceholders(USER_KEY_FILE)),
                 resolvePlaceholders(USER_KEY_TYPE),
-                systemVault(), null);
+                null, systemVault());
+    }
+
+    static private Vault systemVault() {
+        return new Vault(
+                new File(resolvePlaceholders(SYSTEM_DATA_FILE)),
+                new File(resolvePlaceholders(SYSTEM_CERT_FILE)),
+                resolvePlaceholders(SYSTEM_CERT_TYPE),
+                new File(resolvePlaceholders(SYSTEM_KEY_FILE)),
+                resolvePlaceholders(SYSTEM_KEY_TYPE),
+                System.getProperties(), null);
     }
 
     // private key
@@ -129,7 +129,7 @@ public class Vault {
     // link to parent vault, usually system-scoped
     private Vault parent;
 
-    private Vault(File dataFile, File certFile, String certType, File keyFile, String keyType, Vault parent, Properties defaults) {
+    private Vault(File dataFile, File certFile, String certType, File keyFile, String keyType, Properties defaults, Vault parent) {
         this.keyFile = keyFile;
         this.keyType = keyType;
         this.certFile = certFile;

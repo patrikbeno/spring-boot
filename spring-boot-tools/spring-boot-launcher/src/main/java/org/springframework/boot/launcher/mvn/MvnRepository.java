@@ -123,8 +123,8 @@ public class MvnRepository {
         String ppassword = String.format(P_PASSWORD, id);
 
         vault.setProperty(purl, uri.toASCIIString());
-        vault.setProperty(pusername, username);
-        vault.setEncryptedProperty(ppassword, password.getValue());
+        if (username != null) vault.setProperty(pusername, username);
+        if (password.getValue() != null) vault.setEncryptedProperty(ppassword, password.getValue());
 
         vault.save();
     }

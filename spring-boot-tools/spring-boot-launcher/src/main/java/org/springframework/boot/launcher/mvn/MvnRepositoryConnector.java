@@ -98,7 +98,7 @@ public class MvnRepositoryConnector {
                 File f = new File(repository.getURL().getPath());
                 connectionVerified = f.exists();
                 if (!f.exists()) {
-                    throw new MvnLauncherException("Invalid repository: " + MvnLauncherCfg.url.asString());
+                    throw new MvnLauncherException("Invalid repository: " + repository.getURL());
                 }
 
                 // unknown / unrecognized protocol
@@ -129,10 +129,10 @@ public class MvnRepositoryConnector {
 
 		Log.debug("Dependencies (alphabetical):");
 
-        List<Callable<MvnArtifact>> tasks = new LinkedList<Callable<MvnArtifact>>();
+        List<Future<MvnArtifact>> tasks = new LinkedList<Future<MvnArtifact>>();
 
 		for (final MvnArtifact ma : sorted) {
-            tasks.add(new Callable<MvnArtifact>() {
+            tasks.add(context.resolvers.submit(new Callable<MvnArtifact>() {
                 @Override
                 public MvnArtifact call() throws Exception {
                     resolve(ma);
@@ -142,7 +142,7 @@ public class MvnRepositoryConnector {
                     }
                     return ma;
                 }
-            });
+            }));
 		}
 
         int size = 0;
@@ -152,11 +152,9 @@ public class MvnRepositoryConnector {
         int requests = 0;
 
         try {
-            List<Future<MvnArtifact>> futures = context.resolvers.invokeAll(tasks);
-
-            for (Future<MvnArtifact> f : futures) {
+            for (Future<MvnArtifact> f : tasks) {
                 MvnArtifact ma = f.get();
-                Log.debug("- %-15s: %s (%s KB @%s)",
+                Log.debug("- %-15s: %-80s  (%4d KB @ %s)",
                         ma.getStatus(), ma,
                         ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : "?",
                         ma.getRepositoryId());
@@ -180,8 +178,9 @@ public class MvnRepositoryConnector {
 		if (!MvnLauncherCfg.quiet.asBoolean()) {
 			long elapsed = System.currentTimeMillis() - started;
 			Log.info(String.format(
-                    "Summary: %d archives, %d KB total (resolved in %d msec, downloaded: %d KB in %d requests). Warnings/Errors: %d/%d.",
+                    "Summary: %d archives, %d KB total (resolved in %d msec, downloaded: %d KB in %d requests, %d KBps). Warnings/Errors: %d/%d.",
                     artifacts.size(), size / 1024, elapsed, downloaded / 1024, requests,
+                    downloaded / 1024 * 1000 / elapsed,
                     warnings, errors));
 		}
 

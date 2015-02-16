@@ -221,7 +221,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 	 * class name from its manifest.
 	 */
 	protected List<MvnArtifact> getArtifacts(MvnRepositoryConnector connector, MvnArtifact ma) throws Exception {
-        Log.debug("Resolving main artifact");
+        Log.debug("Resolving main artifact: %s", ma);
 
 		StatusLine.push("Resolving %s", ma);
         try {
@@ -229,6 +229,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
             if (!f.exists()) {
                 throw new MvnLauncherException("Cannot resolve " + ma.asString() + ": " + ma.getError());
             }
+            StatusLine.update("Resolving %s", ma);
             JarFileArchive jar = new JarFileArchive(f);
             mainClass = jar.getMainClass(); // simple but inappropriate place to do this
             List<MvnArtifact> artifacts = new LinkedList<MvnArtifact>();
@@ -257,31 +258,16 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 	}
 
     MvnRepositoryConnector buildMvnRepositoryConnector(MvnRepositoryConnectorContext context) {
-
-        InputStream in = null;
-        try {
-            Properties system = System.getProperties();
-            in = getClass().getResourceAsStream("repo-defaults.properties");
-            Properties defaults = new Properties();
-            defaults.load(in);
-            Enumeration<?> names = defaults.propertyNames();
-            while (names.hasMoreElements()) {
-                String name = (String) names.nextElement();
-                if (!system.containsKey(name)) {
-                    system.setProperty(name, defaults.getProperty(name));
-                }
-            }
-        } catch (IOException ignore) {
-        } finally {
-            if (in != null) try { in.close(); } catch (IOException ignore) {}
-        }
-
         List<String> ids = MvnLauncherCfg.repositories.asList();
         Collections.reverse(ids);
         MvnRepositoryConnector connector = null;
         for (String id : ids) {
             MvnRepository repo = MvnRepository.forRepositoryId(id);
             connector = new MvnRepositoryConnector(repo, context, connector);
+        }
+        Log.debug("Using repositories:");
+        for (MvnRepositoryConnector c = connector; c != null; c = c.parent) {
+            Log.debug("- %8s : %s", c.repository.getId(), c.repository.getURL());
         }
         return connector;
     }

@@ -54,7 +54,7 @@ import org.springframework.boot.loader.util.SystemPropertyUtils;
 public enum MvnLauncherCfg {
 
 	// naming convention broken intentionally: enum name() is also property name used in
-	// -DMvnLauncher.{name}={value}
+	// -DMvnLauncher.{name}={value} or --MvnLauncher.{name}={value}
 
 	/**
 	 * Particular application home directory; Usually not current directory, not user
@@ -87,10 +87,31 @@ public enum MvnLauncherCfg {
 			"classpath:META-INF/springboot/defaults.properties" // application/library defaults
 	)),
 
-	// keep this on top to enable logging of other configuration values when debug=true
-	// leaving this below #defaults enables support for this property in user
-	// configuration file (whatever is already
-	// defined, cannot be overridden)
+    /**
+     * Maven repositories to use (comma separated list).
+     * Defaults: github,central (repository URLs are automatically exported to system properties if undefined, hence
+     * providing fallback in case of missing configuration)
+     */
+    repositories("github,central"),
+
+    /**
+     * Launcher cache directory. Defaults to {@code $ user.home}/.springboot/cache}
+     */
+    cache("${user.home}/.springboot/cache"),
+
+    /**
+     * Maven artifact entrypoint URI in form {@code groupId:artifactId:version}. If
+     * defined, launcher resolves it and uses its metadata to configure classpath and main
+     * class. If undefined (default), launcher proceeds as usual, using its own archive to
+     * load dependencies and resolve main class. This option enables using SpringBoot
+     * MvnLauncher as generic repo-based application launcher.
+     */
+    artifact,
+
+
+    /**
+     * Enable configuration and connector logging
+     */
 	debug(false),
 
     /**
@@ -98,12 +119,10 @@ public enum MvnLauncherCfg {
      */
     quiet(false),
 
+    /**
+     * Report activity status
+     */
     statusLine(System.console() != null),
-
-	/**
-	 * Launcher cache directory. Defaults to {@code $ user.home}/.springboot/cache}
-	 */
-	cache("${user.home}/.springboot/cache"),
 
 	/**
 	 * If set, final resolved classpath will be logged (debug level must be enabled).
@@ -187,48 +206,14 @@ public enum MvnLauncherCfg {
 	 */
 	update(false),
 
-    repositories("jrevolt,central"),
-
-	/**
-	 * URL of the remote (source) Maven repository. Defaults to local user repository:
-	 * ${user.home}/.m2/repository
-     * main: https://github.com/patrikbeno/spring-boot/raw/MvnLauncherDist/
-     * fallback: http://repo1.maven.org/maven2
-	 */
-	url("http://repo1.maven.org/maven2"),
-
-	/**
-	 * Remote repository authentication (username). Only basic authentication is supported
-	 * at the moment.
-	 */
-	username,
-
-	/**
-	 * Remote repository authentication (password). Only basic authentication is supported
-	 * at the moment.
-	 */
-	password,
-
     /**
-     * Saves used-provided credentials in a user's vault.
-	 * For credentials to be saved, a repository alias must be provided in addition to URL, username and password.
-	 * @see #repository
-	 * @see #url
-	 * @see #username
-	 * @see #password
+     * Maximum number of concurrent artifact resolvers.
      */
-	save(false),
+    resolvers("50"),
 
     /**
-	 * Maven artifact entrypoint URI in form {@code groupId:artifactId:version}. If
-	 * defined, launcher resolves it and uses its metadata to configure classpath and main
-	 * class. If undefined (default), launcher proceeds as usual, using its own archive to
-	 * load dependencies and resolve main class. This option enables using SpringBoot
-	 * MvnLauncher as generic repo-based application launcher.
-	 */
-	artifact,
-
-    resolvers("50"),
+     * Maximum number of concurrent artifact downloaders. Download is triggered by a resolver.
+     */
     downloads("10"),
 
 	;

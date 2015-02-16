@@ -15,21 +15,15 @@
  */
 package org.springframework.boot.launcher;
 
-import org.springframework.boot.launcher.mvn.Decryptable;
 import org.springframework.boot.launcher.mvn.MvnLauncher;
-import org.springframework.boot.launcher.mvn.MvnRepository;
-import org.springframework.boot.launcher.util.Log;
-import org.springframework.boot.launcher.vault.Vault;
 import org.springframework.boot.loader.util.UrlSupport;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,31 +53,19 @@ public class Main {
 
         args = processArguments(args);
 
+        exportRepositoryDefaults();
+
         MvnLauncherCfg.configure();
 
-//		if (MvnLauncherCfg.initVault.asBoolean()) {
-//			Vault.vault().init();
-//		}
-
-        if (MvnLauncherCfg.save.asBoolean()) {
-            saveCredentials();
-			Log.info("Vault updated; exiting. (You should not both update credentials and execute an application.)");
-			return;
-        }
-
         if (!MvnLauncherCfg.artifact.isDefined()) {
-			InputStream in = getClass().getResourceAsStream("README.txt");
-			Scanner scanner = new Scanner(in);
-			scanner.useDelimiter("\\Z");
-			String s = scanner.next();
-			System.out.println(s);
-			System.exit(-1);
-		}
+            readme();
+            System.exit(-1);
+        }
 
         new MvnLauncher(MvnLauncherCfg.artifact.asMvnArtifact()).launch(args);
 	}
 
-	/**
+    /**
 	 * Go through all arguments and provide special handling for {@code MvnLauncher}
 	 * configuration properties: {@code --DMvnLauncher.NAME=VALUE} or
 	 * {@code --MvnLauncher.NAME=VALUE}. Such properties are propagated to system
@@ -97,33 +79,53 @@ public class Main {
 	 * @return
 	 */
 	protected String[] processArguments(String[] args) {
-		Pattern pattern = Pattern.compile("(?:-D|--)(MvnLauncher\\.\\p{javaJavaIdentifierPart}+)=(.*)");
+
+        Pattern pattern = Pattern.compile("(?:-D|--)((?:MvnLauncher\\.)?\\p{javaJavaIdentifierPart}+)=(.*)");
+
 		List<String> arglist = new LinkedList<String>();
 
 		boolean scan = true;
 		String artifact = null;
 
-		// {launcher options} {artifact} {options}
+		// [launcher-options] [artifact] [launcher-options | application-options]
 		for (String arg : args) {
-			// this means abort special argument processing and use the remaining args `as
-			// is`.
+
 			if (scan && arg.equals("--")) {
-				scan = false;
+                // double-dash aborts argument parsing
+                scan = false;
 				continue;
 			}
-			Matcher m = pattern.matcher(arg);
-			if (scan && m.matches()) {
-				// if scan mode is on and the argument is a MvnLauncher option, propagate
-				// it to system properties
-				System.setProperty(m.group(1), m.group(2));
 
-			}
-			else if (scan && artifact == null) {
-				// if scan is enabled and current option is not a MvnLauncher option,
-				// assume it's an artifact URI
-				artifact = arg;
-                System.setProperty(MvnLauncherCfg.artifact.getPropertyName(), artifact);
+            if (!scan) {
+                // argument parsing has been disabled, copy arg as-is
+                arglist.add(arg);
+                continue;
             }
+
+            boolean isArtifactDefined = (artifact != null);
+			Matcher m = pattern.matcher(arg);
+            boolean isOption = m.matches();
+
+            if (!isOption && !isArtifactDefined) {
+                // current option is not a MvnLauncher option, and artifact URI has not yet been defined
+                // assume this argument is an artifact URI
+                artifact = arg;
+                System.setProperty(MvnLauncherCfg.artifact.getPropertyName(), artifact);
+                continue;
+            }
+
+            String name = isOption ? m.group(1) : null;
+            String value = isOption ? m.group(2) : null;
+
+            if (isOption && !isArtifactDefined && !name.startsWith("MvnLauncher.")) {
+                // expand short option
+                name = "MvnLauncher."+name;
+            }
+
+			if (isOption) {
+				// propagate option to system properties
+				System.setProperty(name, value);
+			}
 			else {
 				// otherwise, just copy the argument as is.
 				arglist.add(arg);
@@ -133,25 +135,36 @@ public class Main {
 		return arglist.toArray(new String[arglist.size()]);
 	}
 
-
-    private void saveCredentials() {
-        String id = MvnLauncherCfg.repository.asString();
-        if (id == null || id.isEmpty()) {
-            Log.error(null, "Rejecting to save credentials with empty repository ID (--%s)", MvnLauncherCfg.repository.getPropertyName());
-        } else {
-			Log.info("Saving credentials for repository `%s`", id);
-			MvnRepository mvnrepo = new MvnRepository(
-					MvnLauncherCfg.repository.asString(),
-					MvnLauncherCfg.url.asURI(true),
-					MvnLauncherCfg.username.asString(),
-					new Decryptable() {
-						@Override
-						public String getValue() {
-							return MvnLauncherCfg.password.asString();
-						}
-					});
-			mvnrepo.save();
+    protected void exportRepositoryDefaults() {
+        InputStream in = null;
+        try {
+            Properties system = System.getProperties();
+            in = getClass().getResourceAsStream("repo-defaults.properties");
+            Properties defaults = new Properties();
+            defaults.load(in);
+            Enumeration<?> names = defaults.propertyNames();
+            while (names.hasMoreElements()) {
+                String name = (String) names.nextElement();
+                if (!system.containsKey(name)) {
+                    system.setProperty(name, defaults.getProperty(name));
+                }
+            }
+        } catch (IOException ignore) {
+        } finally {
+            if (in != null) try { in.close(); } catch (IOException ignore) {}
         }
     }
 
+    private void readme() {
+        InputStream in = null;
+        try {
+            in = getClass().getResourceAsStream("README.txt");
+            Scanner scanner = new Scanner(in);
+            scanner.useDelimiter("\\Z");
+            String s = scanner.next();
+            System.out.println(s);
+        } finally {
+            if (in != null) try { in.close(); } catch (IOException ignore) {}
+        }
+    }
 }
