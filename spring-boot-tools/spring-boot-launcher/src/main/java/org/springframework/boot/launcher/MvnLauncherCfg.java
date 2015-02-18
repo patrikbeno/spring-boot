@@ -209,12 +209,12 @@ public enum MvnLauncherCfg {
     /**
      * Maximum number of concurrent artifact resolvers.
      */
-    resolvers("50"),
+    resolvers("15"),
 
     /**
      * Maximum number of concurrent artifact downloaders. Download is triggered by a resolver.
      */
-    downloads("10"),
+    downloaders("5"),
 
 	;
 
@@ -363,14 +363,14 @@ public enum MvnLauncherCfg {
 					Log.debug(header);
 					header = null;
 				}
-				String key = v.getPropertyName();
-				String value = (key.matches("(?i).*password.*"))
-						? "***" // masking password; QDH solution
-						: SystemPropertyUtils.resolvePlaceholders(v.asString());
-				Log.debug("- %-30s : %s", key, value);
+				Log.debug("- %-30s : %s", v.getPropertyName(), SystemPropertyUtils.resolvePlaceholders(v.asString()));
 			}
 		}
 
+        if (downloaders.asInt() < resolvers.asInt()) {
+            Log.warn("Suboptimal configuration: number of downloaders should not be lower than number of resolvers (%d<%d)",
+                    downloaders.asInt(), resolvers.asInt());
+        }
 	}
     
     static public void export() {

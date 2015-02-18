@@ -138,7 +138,9 @@ public class MvnRepositoryConnector {
                     resolve(ma);
                     switch (ma.getStatus()) {
                         case NotFound:
-                            if (parent != null) { parent.resolve(ma); }
+                            if (parent != null) {
+                                parent.resolve(ma);
+                            }
                     }
                     return ma;
                 }
@@ -154,7 +156,7 @@ public class MvnRepositoryConnector {
         try {
             for (Future<MvnArtifact> f : tasks) {
                 MvnArtifact ma = f.get();
-                Log.debug("- %-15s: %-80s  (%4d KB @ %s)",
+                Log.debug("- %-15s: %-60s  (%3dKB @%s)",
                         ma.getStatus(), ma,
                         ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : "?",
                         ma.getRepositoryId());
@@ -404,7 +406,6 @@ public class MvnRepositoryConnector {
 	File resource(MvnArtifact artifact, MvnArtifact.Status status, URL source, File file, Throwable error) {
 		artifact.setStatus(status);
 		artifact.setSource(source);
-        artifact.setRepositoryId(repository.getId());
 		artifact.setFile(file);
 		if (error != null && artifact.getError() == null) { artifact.setError(error); }
 
@@ -412,11 +413,13 @@ public class MvnRepositoryConnector {
 		case Downloaded:
 		case Updated:
 		case NotModified:
+            artifact.setRepositoryId(repository.getId());
 			rememberLastUpdateTime(getLastUpdatedMarkerFile(file), System.currentTimeMillis());
 			break;
 		case Cached:
+        case Offline:
+            artifact.setRepositoryId("cache");
 		case NotFound:
-		case Offline:
 		case Invalid:
 			break;
 		default:
