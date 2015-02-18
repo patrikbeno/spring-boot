@@ -28,23 +28,23 @@ public class StatusLine {
 
     static private LinkedList<Message> status = new LinkedList<Message>();
 
-    static public void push(String message, Object ... args) {
+    static synchronized public void push(String message, Object ... args) {
         status.add(new Message(message, args));
         refresh();
 //        try { Thread.sleep(1000); } catch (Exception ignore) {}
     }
 
-    static public void pop() {
+    static synchronized public void pop() {
         status.removeLast();
         refresh();
     }
 
-    static public void update(String message, Object... args) {
+    static synchronized public void update(String message, Object... args) {
         status.removeLast(); status.add(new Message(message, args)); // this must not fail or the stack breaks
         refresh();
     }
 
-    static public void clear() {
+    static synchronized public void clear() {
         status.clear();
         refresh();
     }
