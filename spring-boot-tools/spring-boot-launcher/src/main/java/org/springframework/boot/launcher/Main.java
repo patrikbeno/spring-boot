@@ -15,18 +15,21 @@
  */
 package org.springframework.boot.launcher;
 
+import org.springframework.boot.launcher.mvn.MvnArtifact;
 import org.springframework.boot.launcher.mvn.MvnLauncher;
+import org.springframework.boot.launcher.util.CommandLine;
 import org.springframework.boot.loader.util.UrlSupport;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Enumeration;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Properties;
+import java.util.Queue;
 import java.util.Scanner;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Set;
+
+import static java.util.Arrays.asList;
 
 /**
  * Start class for MvnLauncher; {@code spring-boot-loader} is executable.
@@ -34,106 +37,71 @@ import java.util.regex.Pattern;
  */
 public class Main {
 
+    static {
+        UrlSupport.init();
+    }
+
 	/**
 	 * Application entry point. Delegates to {@code launch()}
 	 * @see #launch(String[])
 	 */
 	public static void main(String[] args) {
-		new Main().launch(args);
+        new Main().launch(new LinkedList<String>(asList(args)));
 	}
 
-	/**
+    protected Main() {
+        exportRepositoryDefaults();
+    }
+
+    /**
 	 * Process arguments and delegate to {@code MvnLauncher}
 	 * @param args
 	 * @see org.springframework.boot.launcher.mvn.MvnLauncher
 	 */
-	protected void launch(String[] args) {
+	protected void launch(Queue<String> args) {
 
-        UrlSupport.init();
-
-        args = processArguments(args);
-
-        exportRepositoryDefaults();
+        CommandLine cmdline = CommandLine.parse(args);
+        exportOptions(cmdline.properties());
 
         MvnLauncherCfg.configure();
 
-        if (!MvnLauncherCfg.artifact.isDefined()) {
+        String command = cmdline.remainder().poll();
+
+        if (command == null) {
             readme();
             System.exit(-1);
         }
 
-        new MvnLauncher(MvnLauncherCfg.artifact.asMvnArtifact()).launch(args);
+        cmdline = CommandLine.parse(cmdline.remainder());
+
+        new MvnLauncher(new MvnArtifact(command)).launch(cmdline.remainder());
 	}
 
-    /**
-	 * Go through all arguments and provide special handling for {@code MvnLauncher}
-	 * configuration properties: {@code --DMvnLauncher.NAME=VALUE} or
-	 * {@code --MvnLauncher.NAME=VALUE}. Such properties are propagated to system
-	 * properties and removed from command line arguments. To skip/abort this special
-	 * processing, use standard double dash {@code --} terminator. Terminator is removed
-	 * from command line arguments as well, and remainder of the arguments is copied as
-	 * is.
-	 *
-	 * @param main
-	 * @param args
-	 * @return
-	 */
-	protected String[] processArguments(String[] args) {
+    void exportOptions(Properties properties) {
+        Set<String> valid = MvnLauncherCfg.names();
+        Set<String> names = properties.stringPropertyNames();
+        for (String name : names) {
+            String fqname = (valid.contains(name)) ? MvnLauncherCfg.valueOf(name).getPropertyName() : null;
+            String value = properties.getProperty(name);
+            System.getProperties().setProperty(
+                    fqname != null ? fqname : name,
+                    value != null && !value.isEmpty() ? value : "true");
+        }
+    }
 
-        Pattern pattern = Pattern.compile("(?:-D|--)((?:MvnLauncher\\.)?\\p{javaJavaIdentifierPart}+)=(.*)");
 
-		List<String> arglist = new LinkedList<String>();
-
-		boolean scan = true;
-		String artifact = null;
-
-		// [launcher-options] [artifact] [launcher-options | application-options]
-		for (String arg : args) {
-
-			if (scan && arg.equals("--")) {
-                // double-dash aborts argument parsing
-                scan = false;
-				continue;
-			}
-
-            if (!scan) {
-                // argument parsing has been disabled, copy arg as-is
-                arglist.add(arg);
-                continue;
-            }
-
-            boolean isArtifactDefined = (artifact != null);
-			Matcher m = pattern.matcher(arg);
-            boolean isOption = m.matches();
-
-            if (!isOption && !isArtifactDefined) {
-                // current option is not a MvnLauncher option, and artifact URI has not yet been defined
-                // assume this argument is an artifact URI
-                artifact = arg;
-                System.setProperty(MvnLauncherCfg.artifact.getPropertyName(), artifact);
-                continue;
-            }
-
-            String name = isOption ? m.group(1) : null;
-            String value = isOption ? m.group(2) : null;
-
-            if (isOption && !isArtifactDefined && !name.startsWith("MvnLauncher.")) {
-                // expand short option
-                name = "MvnLauncher."+name;
-            }
-
-			if (isOption) {
-				// propagate option to system properties
-				System.setProperty(name, value);
-			}
-			else {
-				// otherwise, just copy the argument as is.
-				arglist.add(arg);
-			}
-		}
-
-		return arglist.toArray(new String[arglist.size()]);
-	}
+    private void readme() {
+        InputStream in = null;
+        try {
+            in = getClass().getResourceAsStream("README.txt");
+            Scanner scanner = new Scanner(in);
+            scanner.useDelimiter("\\Z");
+            String s = scanner.next();
+            System.out.println(s);
+        } finally {
+            if (in != null) try { in.close(); } catch (IOException ignore) {}
+        }
+    }
 
     protected void exportRepositoryDefaults() {
         InputStream in = null;
@@ -155,16 +123,4 @@ public class Main {
         }
     }
 
-    private void readme() {
-        InputStream in = null;
-        try {
-            in = getClass().getResourceAsStream("README.txt");
-            Scanner scanner = new Scanner(in);
-            scanner.useDelimiter("\\Z");
-            String s = scanner.next();
-            System.out.println(s);
-        } finally {
-            if (in != null) try { in.close(); } catch (IOException ignore) {}
-        }
-    }
 }

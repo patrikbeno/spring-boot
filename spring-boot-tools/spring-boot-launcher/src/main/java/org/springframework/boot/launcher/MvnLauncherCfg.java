@@ -26,8 +26,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.boot.launcher.mvn.MvnArtifact;
@@ -92,7 +94,7 @@ public enum MvnLauncherCfg {
      * Defaults: github,central (repository URLs are automatically exported to system properties if undefined, hence
      * providing fallback in case of missing configuration)
      */
-    repositories("github,central"),
+    repositories("greenhorn,central"),
 
     /**
      * Launcher cache directory. Defaults to {@code $ user.home}/.springboot/cache}
@@ -217,6 +219,14 @@ public enum MvnLauncherCfg {
     downloaders("5"),
 
 	;
+
+    static public Set<String> names() {
+        Set<String> names = new HashSet<String>();
+        for (MvnLauncherCfg v : values()) {
+            names.add(v.name());
+        }
+        return names;
+    }
 
 	private String dflt;
 
@@ -367,9 +377,9 @@ public enum MvnLauncherCfg {
 			}
 		}
 
-        if (downloaders.asInt() < resolvers.asInt()) {
-            Log.warn("Suboptimal configuration: number of downloaders should not be lower than number of resolvers (%d<%d)",
-                    downloaders.asInt(), resolvers.asInt());
+        if (resolvers.asInt() < downloaders.asInt()) {
+            Log.warn("Suboptimal configuration: number of resolver should not be lower than number of downloaders (%d<%d)",
+                    resolvers.asInt(), downloaders.asInt());
         }
 	}
     

@@ -17,14 +17,12 @@ package org.springframework.boot.launcher.mvn;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Properties;
+import java.util.Queue;
 import java.util.jar.Manifest;
 
 import org.springframework.boot.launcher.MvnLauncherCfg;
@@ -35,6 +33,7 @@ import org.springframework.boot.loader.ExecutableArchiveLauncher;
 import org.springframework.boot.loader.LaunchedURLClassLoader;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.JarFileArchive;
+import org.springframework.boot.loader.util.UrlSupport;
 
 import static org.springframework.boot.launcher.MvnLauncherCfg.debug;
 import static org.springframework.boot.launcher.MvnLauncherCfg.showClasspath;
@@ -49,6 +48,10 @@ import static org.springframework.boot.launcher.MvnLauncherCfg.showClasspath;
  * @author Patrik Beno
  */
 public class MvnLauncher extends ExecutableArchiveLauncher {
+
+    static {
+        UrlSupport.init();
+    }
 
 	/**
 	 * Name of the manifest attribute containing the comma-delimited list Maven URIs
@@ -166,10 +169,9 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
         }
     }
 
-	@Override
-	public void launch(String[] args) {
-		super.launch(args); // todo implement this
-	}
+    public void launch(Queue<String> args) {
+        launch(args.toArray(new String[args.size()]));
+    }
 
 	@Override
 	protected void launch(String[] args, String mainClass, ClassLoader classLoader) throws Exception {
@@ -267,7 +269,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
         }
         Log.debug("Using repositories:");
         for (MvnRepositoryConnector c = connector; c != null; c = c.parent) {
-            Log.debug("- %8s : %s", c.repository.getId(), c.repository.getURL());
+            Log.debug("- %12s : %s", c.repository.getId(), c.repository.getURL());
         }
         return connector;
     }
