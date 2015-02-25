@@ -15,16 +15,25 @@
  */
 package org.springframework.boot.launcher;
 
+import org.springframework.boot.launcher.mvn.Decryptable;
 import org.springframework.boot.launcher.mvn.MvnArtifact;
 import org.springframework.boot.launcher.mvn.MvnLauncher;
+import org.springframework.boot.launcher.mvn.MvnRepository;
 import org.springframework.boot.launcher.util.CommandLine;
 import org.springframework.boot.launcher.util.Log;
+import org.springframework.boot.launcher.vault.Vault;
 import org.springframework.boot.loader.util.UrlSupport;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.URI;
 import java.util.Enumeration;
+import java.util.Formatter;
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Scanner;
@@ -47,7 +56,7 @@ public class Main {
 	 * Application entry point. Delegates to {@code launch()}
 	 * @see #launch(String[])
 	 */
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) {
         try {
             new Main().launch(new LinkedList<String>(asList(args)));
         } catch (MvnLauncherException e) {
@@ -56,29 +65,52 @@ public class Main {
         }
     }
 
+
     /**
 	 * Process arguments and delegate to {@code MvnLauncher}
 	 * @param args
 	 * @see org.springframework.boot.launcher.mvn.MvnLauncher
 	 */
-	protected void launch(Queue<String> args) throws Exception {
+	protected void launch(Queue<String> args) throws MvnLauncherException {
 
         CommandLine cmdline = CommandLine.parse(args);
         exportOptions(cmdline.properties());
 
         MvnLauncherCfg.configure();
 
-        String command = cmdline.remainder().poll();
+        String cmd = cmdline.remainder().peek();
 
-        if (command == null) {
-            readme();
-            System.exit(-1);
+        if (cmd == null) {
+            help(cmdline);
         }
 
-        cmdline = CommandLine.parse(cmdline.remainder());
+        Map<String, Method> commands = new HashMap<String, Method>();
+        register("launch", commands);
+        register("encrypt", commands);
+        register("repository", commands);
+        register("help", commands);
 
-        new MvnLauncher(new MvnArtifact(command)).launch(cmdline.remainder());
-	}
+        cmd = commands.containsKey(cmd) ? cmd : "launch";
+
+        try {
+            commands.get(cmd).invoke(this, cmdline);
+        } catch (InvocationTargetException e) {
+            throw e.getTargetException() instanceof MvnLauncherException
+                    ? (MvnLauncherException) e.getTargetException()
+                    : new MvnLauncherException(e.getTargetException());
+        } catch (IllegalAccessException e) {
+            throw new UnsupportedOperationException(e);
+        }
+    }
+
+    void register(String name, Map<String, Method> index) {
+        try {
+            Method m = getClass().getDeclaredMethod(name, CommandLine.class);
+            index.put(m.getName(), m);
+        } catch (NoSuchMethodException e) {
+            throw new UnsupportedOperationException(e);
+        }
+    }
 
     void exportOptions(Properties properties) {
         Set<String> valid = MvnLauncherCfg.names();
@@ -125,5 +157,52 @@ public class Main {
             if (in != null) try { in.close(); } catch (IOException ignore) {}
         }
     }
+
+    /// @CommandHandler
+    void launch(CommandLine cmdline) throws Exception {
+        String command = cmdline.remainder().poll();
+        new MvnLauncher(new MvnArtifact(command)).launch(cmdline.remainder());
+    }
+
+    /// @CommandHandler
+    void encrypt(CommandLine cmdline) {
+        cmdline.remainder().poll();
+        String value = cmdline.remainder().peek();
+        String encrypted = Vault.instance().encrypt(value);
+        System.out.println(encrypted);
+    }
+
+    /// @CommandHandler
+    void repository(CommandLine cmdline) {
+        cmdline.remainder().poll();
+        cmdline = CommandLine.parse(cmdline.remainder());
+
+        String id = option(cmdline, "id", true, "Repository alias");
+        String url = option(cmdline, "url", true, "Repository URL");
+        String username = option(cmdline, "username", false, "Auth: user name");
+        String password = option(cmdline, "password", false, "Auth: password");
+
+        password = Vault.instance().encrypt(password);
+
+        Formatter f = new Formatter(System.out);
+        f.format(MvnRepository.P_URL, id).format("=%s%n", url);
+        if (username != null) { f.format(MvnRepository.P_USERNAME, id).format("=%s%n", username); }
+        if (password != null) { f.format(MvnRepository.P_PASSWORD, id).format("=%s%n", password); }
+    }
+
+    /// @CommandHandler
+    void help(CommandLine cmdline) {
+        readme();
+        System.exit(-1);
+    }
+
+    String option(CommandLine cmdline, String property, boolean required, String hint) {
+        String value = cmdline.properties().getProperty(property);
+        if (value == null && required) {
+            throw new MvnLauncherException(String.format("Required: --%s=<%s>", property, hint));
+        }
+        return value;
+    }
+
 
 }

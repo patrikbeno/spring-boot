@@ -213,7 +213,7 @@ public enum MvnLauncherCfg {
      */
     downloaders("5"),
 
-	;
+    ;
 
     static public Set<String> names() {
         Set<String> names = new HashSet<String>();
