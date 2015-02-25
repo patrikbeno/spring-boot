@@ -18,6 +18,7 @@ package org.springframework.boot.launcher;
 import org.springframework.boot.launcher.mvn.MvnArtifact;
 import org.springframework.boot.launcher.mvn.MvnLauncher;
 import org.springframework.boot.launcher.util.CommandLine;
+import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.loader.util.UrlSupport;
 
 import java.io.IOException;
@@ -39,18 +40,20 @@ public class Main {
 
     static {
         UrlSupport.init();
+        exportRepositoryDefaults();
     }
 
 	/**
 	 * Application entry point. Delegates to {@code launch()}
 	 * @see #launch(String[])
 	 */
-	public static void main(String[] args) {
-        new Main().launch(new LinkedList<String>(asList(args)));
-	}
-
-    protected Main() {
-        exportRepositoryDefaults();
+	public static void main(String[] args) throws Exception {
+        try {
+            new Main().launch(new LinkedList<String>(asList(args)));
+        } catch (MvnLauncherException e) {
+            Log.error(e, "Could not launch application!");
+            System.exit(-1);
+        }
     }
 
     /**
@@ -58,7 +61,7 @@ public class Main {
 	 * @param args
 	 * @see org.springframework.boot.launcher.mvn.MvnLauncher
 	 */
-	protected void launch(Queue<String> args) {
+	protected void launch(Queue<String> args) throws Exception {
 
         CommandLine cmdline = CommandLine.parse(args);
         exportOptions(cmdline.properties());
@@ -103,11 +106,11 @@ public class Main {
         }
     }
 
-    protected void exportRepositoryDefaults() {
+    static protected void exportRepositoryDefaults() {
         InputStream in = null;
         try {
             Properties system = System.getProperties();
-            in = getClass().getResourceAsStream("repo-defaults.properties");
+            in = Main.class.getResourceAsStream("repo-defaults.properties");
             Properties defaults = new Properties();
             defaults.load(in);
             Enumeration<?> names = defaults.propertyNames();

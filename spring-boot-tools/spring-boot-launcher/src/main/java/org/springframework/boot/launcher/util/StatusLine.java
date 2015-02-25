@@ -3,13 +3,17 @@ package org.springframework.boot.launcher.util;
 import org.springframework.boot.launcher.MvnLauncherCfg;
 
 import java.util.ArrayList;
+import java.util.Formatter;
 import java.util.LinkedList;
+
+import static org.springframework.boot.launcher.util.Log.out;
+
 
 /**
  * @author <a href="mailto:patrikbeno@gmail.com">Patrik Beno</a>
  */
 public class StatusLine {
-    
+
     static private class Message {
 
         String msg;
@@ -31,39 +35,55 @@ public class StatusLine {
     static synchronized public void push(String message, Object ... args) {
         status.add(new Message(message, args));
         refresh();
-//        try { Thread.sleep(1000); } catch (Exception ignore) {}
     }
 
     static synchronized public void pop() {
+        resetLine();
         status.removeLast();
         refresh();
     }
 
     static synchronized public void update(String message, Object... args) {
+        resetLine();
         status.removeLast(); status.add(new Message(message, args)); // this must not fail or the stack breaks
         refresh();
     }
 
     static synchronized public void clear() {
+        resetLine();
         status.clear();
         refresh();
     }
 
     static void refresh() {
         if (MvnLauncherCfg.quiet.asBoolean()) { return; }
-        if (!MvnLauncherCfg.statusLine.asBoolean()) { return; }
-        synchronized (System.out) {
+        synchronized (out()) {
             resetLine();
-            for (Message m : new ArrayList<Message>(status)) {
-                System.out.printf("> %s ", m);
-            }
+            print(new Formatter(out()));
+            out().flush();
         }
     }
 
     static public void resetLine() {
-        if (MvnLauncherCfg.statusLine.asBoolean()) {
-            System.err.print("\033[2K\r");
-            System.err.flush();
+        if (MvnLauncherCfg.quiet.asBoolean()) { return; }
+
+        StringBuilder sb = new StringBuilder();
+        Formatter f = new Formatter(sb);
+        print(f);
+        for (int i=0; i<sb.length(); i++) {
+            sb.setCharAt(i, ' ');
         }
+        out().append('\r').append(sb).append('\r');
+        out().flush();
     }
+
+    static private Formatter print(Formatter f) {
+        f.format("\033[1;32m");
+        for (Message m : new ArrayList<Message>(status)) {
+            f.format("> %s ", m);
+        }
+        f.format("\033[0m");
+        return f;
+    }
+    
 }

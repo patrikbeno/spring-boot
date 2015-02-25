@@ -44,7 +44,7 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 	// used for debug logging, and
 	// the output looks better in CamelCase that UPPER_CASE.
 	static public enum Status {
-		NotModified, Downloaded, Updated, Cached, Offline, NotFound, Invalid
+		Resolving, NotModified, Downloading, Downloaded, Updated, Cached, Offline, NotFound, Invalid
 	}
 
 
@@ -60,6 +60,7 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 
 	private Throwable error; // resolver error, if any (for reporting purposes)
 
+    public long size;
     public long downloaded;
     public int requests;
 

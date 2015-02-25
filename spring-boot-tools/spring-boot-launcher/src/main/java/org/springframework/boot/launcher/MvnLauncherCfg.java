@@ -121,11 +121,6 @@ public enum MvnLauncherCfg {
      */
     quiet(false),
 
-    /**
-     * Report activity status
-     */
-    statusLine(System.console() != null),
-
 	/**
 	 * If set, final resolved classpath will be logged (debug level must be enabled).
 	 */
@@ -327,6 +322,18 @@ public enum MvnLauncherCfg {
 
 	// /
 
+    static private void validate() {
+        if (downloaders.asInt() < 1) {
+            downloaders.set("1");
+        }
+        if (downloaders.asInt() > 50) {
+            downloaders.set("50");
+        }
+        if (resolvers.asInt() <= downloaders.asInt()) {
+            resolvers.set(Integer.toString(downloaders.asInt() * 2));
+        }
+    }
+
 	static public void configure() {
 		String version = Launcher.class.getPackage().getImplementationVersion();
 
@@ -357,29 +364,26 @@ public enum MvnLauncherCfg {
 
 		// propagate defaults, if available
 		for (MvnLauncherCfg v : values()) {
+            // override built-in default with value from resources
+            v.dflt = props.getProperty(v.getPropertyName(), v.dflt);
+
 			String value = System.getProperty(v.getPropertyName());
 			if (value == null && v.dflt != null) {
 				System.getProperty(v.getPropertyName(), SystemPropertyUtils.resolvePlaceholders(v.dflt));
 			}
 		}
 
-		header = "MvnLauncher configuration:";
-		for (MvnLauncherCfg v : values()) {
-			// override built-in default with value from resources
-			v.dflt = props.getProperty(v.getPropertyName(), v.dflt);
+        validate();
 
-			if (isDebugEnabled()) {
-				if (header != null) {
-					Log.debug(header);
-					header = null;
-				}
-				Log.debug("- %-30s : %s", v.getPropertyName(), SystemPropertyUtils.resolvePlaceholders(v.asString()));
-			}
-		}
-
-        if (resolvers.asInt() < downloaders.asInt()) {
-            Log.warn("Suboptimal configuration: number of resolver should not be lower than number of downloaders (%d<%d)",
-                    resolvers.asInt(), downloaders.asInt());
+        if (isDebugEnabled()) {
+            header = "MvnLauncher configuration:";
+            for (MvnLauncherCfg v : values()) {
+                if (header != null) {
+                    Log.debug(header);
+                    header = null;
+                }
+                Log.debug("- %-30s : %s", v.getPropertyName(), SystemPropertyUtils.resolvePlaceholders(v.asString()));
+            }
         }
 	}
     
@@ -441,7 +445,7 @@ public enum MvnLauncherCfg {
 			if (isDirectory && !surl.endsWith("/")) {
 				surl += "/";
 			}
-			String resolved = resolvePlaceholders(surl).replace('\\', '/');
+			String resolved = resolvePlaceholders(surl).replace('.', '/');
 			return new URL(resolved);
 		}
 		catch (MalformedURLException e) {
@@ -456,4 +460,19 @@ public enum MvnLauncherCfg {
 		return name() + "=" + raw();
 	}
 
+    static public boolean isConsole() {
+        return System.console() != null;
+    }
+
+    static public boolean isCygwin() {
+        return System.console() == null && System.getenv("CYGWIN") != null;
+    }
+
+    static public boolean isIntelliJ() {
+        try {
+            return Class.forName("com.intellij.rt.execution.application.AppMain") != null;
+        } catch (ClassNotFoundException ignore) {
+            return false;
+        }
+    }
 }

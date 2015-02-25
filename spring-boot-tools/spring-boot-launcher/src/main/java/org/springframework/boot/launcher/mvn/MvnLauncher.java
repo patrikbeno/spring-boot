@@ -129,10 +129,14 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
         MvnRepositoryConnectorContext context = new MvnRepositoryConnectorContext();
         try {
             MvnRepositoryConnector connector = buildMvnRepositoryConnector(context);
+            List<MvnArtifact> artifacts;
 
-            // get list of dependencies from external root artifact (if defined), or
-            // current archive (default)
-            List<MvnArtifact> artifacts = (mvnartifact != null) ? getArtifacts(connector, mvnartifact) : getArtifacts();
+            try {
+                StatusLine.push("Resolving %s", mvnartifact.asString());
+                artifacts = getArtifacts(connector, mvnartifact);
+            } finally {
+                StatusLine.pop();
+            }
 
             // register also every extra artifact not mentioned in main artifact and its dependencies
             ext = new ArrayList<MvnArtifact>(ext != null ? ext : Collections.<MvnArtifact>emptyList());
@@ -169,7 +173,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
         }
     }
 
-    public void launch(Queue<String> args) {
+    public void launch(Queue<String> args) throws Exception {
         launch(args.toArray(new String[args.size()]));
     }
 
@@ -223,26 +227,17 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 	 * class name from its manifest.
 	 */
 	protected List<MvnArtifact> getArtifacts(MvnRepositoryConnector connector, MvnArtifact ma) throws Exception {
-        Log.debug("Resolving main artifact: %s", ma);
-
-		StatusLine.push("Resolving %s", ma);
-        try {
-            File f = connector.resolve(ma);
-            if (!f.exists()) {
-                throw new MvnLauncherException("Cannot resolve " + ma.asString() + ": " + ma.getError());
-            }
-            StatusLine.update("Resolving %s", ma);
-            JarFileArchive jar = new JarFileArchive(f);
-            mainClass = jar.getMainClass(); // simple but inappropriate place to do this
-            List<MvnArtifact> artifacts = new LinkedList<MvnArtifact>();
-            artifacts.add(ma);
-            artifacts.addAll(getArtifacts(jar));
-            return artifacts;
+        File f = connector.resolve(ma);
+        if (!f.exists()) {
+            throw new MvnLauncherException("Cannot resolve " + ma.asString() + ": " + ma.getError());
         }
-        finally {
-            StatusLine.pop();
-        }
-	}
+        JarFileArchive jar = new JarFileArchive(f);
+        mainClass = jar.getMainClass(); // simple but inappropriate place to do this
+        List<MvnArtifact> artifacts = new LinkedList<MvnArtifact>();
+        artifacts.add(ma);
+        artifacts.addAll(getArtifacts(jar));
+        return artifacts;
+    }
 
 	// parses Maven URIs and converts them into list of Maven artifacts
 	private List<MvnArtifact> toArtifacts(String[] strings) {
@@ -269,7 +264,8 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
         }
         Log.debug("Using repositories:");
         for (MvnRepositoryConnector c = connector; c != null; c = c.parent) {
-            Log.debug("- %12s : %s", c.repository.getId(), c.repository.getURL());
+            String credentials = c.repository.hasPassword() ? c.repository.getUserName() : "<anonymous>";
+            Log.debug("- %12s : %s (%s)", c.repository.getId(), c.repository.getURL(), credentials);
         }
         return connector;
     }
