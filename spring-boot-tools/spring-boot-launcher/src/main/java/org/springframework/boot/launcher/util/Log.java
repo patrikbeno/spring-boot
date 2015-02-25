@@ -25,7 +25,7 @@ public class Log {
         return MvnLauncherCfg.isDebugEnabled();
     }
 
-	static public void log(Level level, String message, Object... args) {
+	static public synchronized void log(Level level, String message, Object... args) {
         switch (level) {
             case DBG:
                 if (!isDebug()) break;
@@ -34,18 +34,18 @@ public class Log {
         }
 	}
 
-	static public void debug(String message, Object... args) {
+	static public synchronized void debug(String message, Object... args) {
 		if (isDebug()) {
             log(out(), DBG, message, args);
         }
 	}
 
-	static public void info(String message, Object... args) {
+	static public synchronized void info(String message, Object... args) {
         if (MvnLauncherCfg.quiet.asBoolean()) { return; }
         log(out(), INF, message, args);
 	}
 
-	static public void warn(String message, Object... args) {
+	static public synchronized void warn(String message, Object... args) {
         if (MvnLauncherCfg.quiet.asBoolean()) { return; }
         log(out(), WRN, message, args);
 	}
