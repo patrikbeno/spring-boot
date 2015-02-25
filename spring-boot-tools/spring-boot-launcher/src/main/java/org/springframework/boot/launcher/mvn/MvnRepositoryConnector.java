@@ -162,7 +162,8 @@ public class MvnRepositoryConnector {
         try {
             for (Future<MvnArtifact> f : tasks) {
                 MvnArtifact ma = f.get();
-                Log.debug("- %-12s: %-60s %s",
+                Log.log(toLevel(ma.getStatus()),
+                        "- %-12s: %-60s %s",
                         ma.getStatus(), ma,
                         ma.getRepositoryId() != null
                                 ? String.format("(%3dKB @%s)", ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : 0, ma.getRepositoryId())
@@ -202,6 +203,15 @@ public class MvnRepositoryConnector {
 		}
 
 	}
+
+    private Log.Level toLevel(MvnArtifact.Status status) {
+        switch (status) {
+            case NotFound:
+                return Log.Level.WRN;
+            default:
+                return Log.Level.DBG;
+        }
+    }
 
     /**
 	 * Resolve single artifact: download or update & verify. Most errors are reported via

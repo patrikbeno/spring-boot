@@ -11,7 +11,7 @@ import static org.springframework.boot.launcher.util.Log.Level.*;
  */
 public class Log {
 
-    static enum Level {
+    static public enum Level {
         DBG(""), INF("\033[1m"), WRN("\033[33m"), ERR("\033[;31m");
 
         String ansi;
@@ -24,6 +24,15 @@ public class Log {
     static public boolean isDebug() {
         return MvnLauncherCfg.isDebugEnabled();
     }
+
+	static public void log(Level level, String message, Object... args) {
+        switch (level) {
+            case DBG:
+                if (!isDebug()) break;
+            default:
+                log(out(), level, message, args);
+        }
+	}
 
 	static public void debug(String message, Object... args) {
 		if (isDebug()) {
