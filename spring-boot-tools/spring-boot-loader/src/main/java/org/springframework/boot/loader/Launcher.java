@@ -54,16 +54,10 @@ public abstract class Launcher {
 	 * called by a subclass {@code public static void main(String[] args)} method.
 	 * @param args the incoming arguments
 	 */
-	protected void launch(String[] args) {
-		try {
-			UrlSupport.init();
-			ClassLoader classLoader = createClassLoader(getClassPathArchives());
-			launch(args, getMainClass(), classLoader);
-		} catch (Exception e) {
-			//Log.error(e, "Could not launch application");
-			e.printStackTrace();
-			System.exit(1);
-		}
+	protected void launch(String[] args) throws Exception {
+        UrlSupport.init();
+        ClassLoader classLoader = createClassLoader(getClassPathArchives());
+        launch(args, getMainClass(), classLoader);
 	}
 
 	/**
