@@ -22,6 +22,7 @@ import org.springframework.boot.launcher.mvn.MvnRepository;
 import org.springframework.boot.launcher.util.CommandLine;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.vault.Vault;
+import org.springframework.boot.loader.Launcher;
 import org.springframework.boot.loader.util.UrlSupport;
 
 import java.io.IOException;
@@ -89,6 +90,7 @@ public class Main {
         register("encrypt", commands);
         register("repository", commands);
         register("help", commands);
+        register("version", commands);
 
         cmd = commands.containsKey(cmd) ? cmd : "launch";
 
@@ -188,6 +190,12 @@ public class Main {
         f.format(MvnRepository.P_URL, id).format("=%s%n", url);
         if (username != null) { f.format(MvnRepository.P_USERNAME, id).format("=%s%n", username); }
         if (password != null) { f.format(MvnRepository.P_PASSWORD, id).format("=%s%n", password); }
+    }
+
+    /// @CommandHandler
+    void version(CommandLine cmdline) {
+        String version = Launcher.class.getPackage().getImplementationVersion();
+        System.out.printf("SpringBoot %s", (version != null ? version : "(unknown version)"));
     }
 
     /// @CommandHandler
