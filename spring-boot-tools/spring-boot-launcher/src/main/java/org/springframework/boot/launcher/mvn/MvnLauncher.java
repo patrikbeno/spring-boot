@@ -15,16 +15,6 @@
  */
 package org.springframework.boot.launcher.mvn;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
-import java.util.jar.Manifest;
-
 import org.springframework.boot.launcher.MvnLauncherCfg;
 import org.springframework.boot.launcher.MvnLauncherException;
 import org.springframework.boot.launcher.util.Log;
@@ -35,8 +25,12 @@ import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.JarFileArchive;
 import org.springframework.boot.loader.util.UrlSupport;
 
-import static org.springframework.boot.launcher.MvnLauncherCfg.debug;
-import static org.springframework.boot.launcher.MvnLauncherCfg.showClasspath;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
+import java.util.SortedSet;
 
 /**
  * Specialized implementation of the {@code Launcher} that intelligently downloads
@@ -53,17 +47,8 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
         UrlSupport.init();
     }
 
-	/**
-	 * Name of the manifest attribute containing the comma-delimited list Maven URIs
-	 * (runtime dependencies, provided build-time)
-	 */
-	static public final String MF_DEPENDENCIES = "Spring-Boot-Dependencies";
-
 	private MvnArtifact artifact;
 
-	// if -DMvnLauncher.artifact is defined, its Start-Class overrides the value defined
-	// by this archive
-	// lazily resolved in #getArtifacts(MvnArtifact)
 	private String mainClass;
 
 	public MvnLauncher(MvnArtifact artifact) {
@@ -100,7 +85,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 	 */
     public ClassLoader resolve(MvnArtifact artifact, List<MvnArtifact> ext, ClassLoader parent) {
 		try {
-			List<Archive> archives = getClassPathArchives(artifact, ext);
+			List<Archive> archives = getClassPathArchives(artifact);
 			List<URL> urls = new ArrayList<URL>(archives.size());
 			for (Archive archive : archives) {
 				urls.add(archive.getUrl());
@@ -111,7 +96,9 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 		catch (Exception e) {
 			throw new MvnLauncherException(e,
 					"Cannot resolve artifact or its dependencies: " + artifact.asString());
-		}
+		} finally {
+            System.gc();
+        }
 	}
 
     public ClassLoader resolve(MvnArtifact artifact, ClassLoader parent) {
@@ -121,52 +108,79 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
     ///
 
 	protected List<Archive> getClassPathArchives(MvnArtifact mvnartifact) throws Exception {
-        return getClassPathArchives(mvnartifact, null);
-    }
 
-	protected List<Archive> getClassPathArchives(MvnArtifact mvnartifact, List<MvnArtifact> ext) throws Exception {
+        List<Archive> archives = new LinkedList<Archive>();
 
-        MvnRepositoryConnectorContext context = new MvnRepositoryConnectorContext();
+        ResolverContext context = new ResolverContext(mvnartifact);
         try {
-            MvnRepositoryConnector connector = buildMvnRepositoryConnector(context);
-            List<MvnArtifact> artifacts;
+            Resolver main = new Resolver(context, mvnartifact);
+
+            int count = 0;
+            int size = 0;
+            int downloaded = 0;
+            int errors = 0;
+            int warnings = 0;
+            int requests = 0;
 
             try {
-                StatusLine.push("Resolving %s", mvnartifact.asString());
-                artifacts = getArtifacts(connector, mvnartifact);
+                context.startProgressMonitor();
+
+                // tiny single line but this is where all happens
+                SortedSet<Resolver> resolvers = main.resolveAll();
+
+                Log.debug("Dependencies (alphabetical):");
+
+                for (Resolver r : resolvers) {
+
+                    // this may block until resolved artifact is available
+                    MvnArtifact ma = r.getResolvedArtifact();
+
+                    if (ma.getFile() != null && ma.getFile().exists()) {
+                        archives.add(new JarFileArchive(ma.getFile()));
+                    }
+
+                    Log.log(toLevel(ma.getStatus()),
+                            "- %-12s: %-60s %s",
+                            ma.getStatus(), ma,
+                            ma.getRepositoryId() != null
+                                    ? String.format("(%3dKB @%s)", ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : 0, ma.getRepositoryId())
+                                    : ""
+                    );
+                    // update some stats
+                    if (ma.isError()) { errors++; }
+                    if (ma.isWarning()) { warnings++; }
+                    if (ma.getFile() != null && ma.getFile().exists()) {
+                        size += ma.getFile().length();
+                    }
+                    downloaded += ma.downloaded;
+                    requests += ma.requests;
+                }
+
+                count = resolvers.size();
+
             } finally {
-                StatusLine.pop();
+                context.stopProgressMonitor();
             }
 
-            // register also every extra artifact not mentioned in main artifact and its dependencies
-            ext = new ArrayList<MvnArtifact>(ext != null ? ext : Collections.<MvnArtifact>emptyList());
-            for (MvnArtifact ma : ext) {
-                if (!artifacts.contains(ma)) {
-                    artifacts.add(ma);
-                }
+            // if enabled, print some final report
+            if (!MvnLauncherCfg.quiet.asBoolean()) {
+                long elapsed = System.currentTimeMillis() - context.created;
+                Log.info(String.format(
+                        "Summary: %d archives, %d KB total (resolved in %d msec, downloaded %d KB in %d requests, %d KBps). Warnings/Errors: %d/%d.",
+                        count, size / 1024, elapsed, downloaded / 1024, requests,
+                        downloaded / 1024 * 1000 / elapsed,
+                        warnings, errors));
             }
 
-            // resolve/download/update/cache all referenced artifacts
-            connector.resolveArtifacts(artifacts);
-
-            // create list of archives for all resolved and available artifacts
-            List<Archive> archives = new LinkedList<Archive>();
-            archives.add(getArchive()); // current archive first
-            for (MvnArtifact ma : artifacts) {
-                if (ma.getFile() != null && ma.getFile().exists()) {
-                    archives.add(new JarFileArchive(ma.getFile()));
-                }
-            }
-
-            // report class path
-            if (showClasspath.asBoolean() && debug.asBoolean()) {
-                Log.debug("Classpath Archives (in actual order):");
-                for (Archive a : archives) {
-                    Log.debug("- %s", a);
-                }
+            // if there are errors and fail-on-error property has not been reset, fail
+            if (MvnLauncherCfg.failOnError.asBoolean() && errors > 0) {
+                throw new MvnLauncherException(String.format(
+                        "%d errors resolving dependencies. Use --%s to view details or --%s to ignore these errors and continue",
+                        errors, MvnLauncherCfg.debug.name(), MvnLauncherCfg.failOnError.name()));
             }
 
             return archives;
+
         } finally {
             context.close();
             StatusLine.resetLine();
@@ -194,79 +208,16 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 		super.launch(args, mainClass, classLoader);
 	}
 
-	/**
-	 * Load list of dependencies for a current archive, as defined in its manifest.
-	 */
-	protected List<MvnArtifact> getArtifacts() throws Exception {
-		return getArtifacts(getArchive());
-	}
+    ///
 
-	/**
-	 * Load list of Maven dependencies from manifest of a specified archive
-	 */
-	private List<MvnArtifact> getArtifacts(Archive archive) {
-		try {
-			Manifest mf = archive.getManifest();
-			String mfdeps = mf.getMainAttributes().getValue(MF_DEPENDENCIES);
-			if (mfdeps == null) {
-				throw new MvnLauncherException(String.format(
-                        "%s undefined in MANIFEST. This is not SpringBoot MvnLauncher-enabled artifact: %s",
-						MF_DEPENDENCIES, archive));
-			}
-			String[] manifestDependencies = mfdeps.split(",");
-			List<MvnArtifact> artifacts = toArtifacts(manifestDependencies);
-			return artifacts;
-		}
-		catch (IOException e) {
-			throw new MvnLauncherException(e, "Cannot resolve artifacts for archive " + archive);
-		}
-	}
-
-	/**
-	 * Resolves specified Maven artifact and reads both list of dependencies and main
-	 * class name from its manifest.
-	 */
-	protected List<MvnArtifact> getArtifacts(MvnRepositoryConnector connector, MvnArtifact ma) throws Exception {
-        File f = connector.resolve(ma);
-        if (!f.exists()) {
-            throw new MvnLauncherException("Cannot resolve " + ma.asString() + ": " + ma.getError());
+    private Log.Level toLevel(MvnArtifact.Status status) {
+        switch (status) {
+            case NotFound:
+                return Log.Level.WRN;
+            default:
+                return Log.Level.DBG;
         }
-        JarFileArchive jar = new JarFileArchive(f);
-        mainClass = jar.getMainClass(); // simple but inappropriate place to do this
-        List<MvnArtifact> artifacts = new LinkedList<MvnArtifact>();
-        artifacts.add(ma);
-        artifacts.addAll(getArtifacts(jar));
-        return artifacts;
     }
 
-	// parses Maven URIs and converts them into list of Maven artifacts
-	private List<MvnArtifact> toArtifacts(String[] strings) {
-		if (strings == null) {
-			return Collections.emptyList();
-		}
-		List<MvnArtifact> result = new ArrayList<MvnArtifact>();
-		for (String s : strings) {
-			if (s == null || s.trim().isEmpty()) {
-				continue;
-			}
-			result.add(new MvnArtifact(s));
-		}
-		return result;
-	}
 
-    MvnRepositoryConnector buildMvnRepositoryConnector(MvnRepositoryConnectorContext context) {
-        List<String> ids = MvnLauncherCfg.repositories.asList();
-        Collections.reverse(ids);
-        MvnRepositoryConnector connector = null;
-        for (String id : ids) {
-            MvnRepository repo = MvnRepository.forRepositoryId(id);
-            connector = new MvnRepositoryConnector(repo, context, connector);
-        }
-        Log.debug("Using repositories:");
-        for (MvnRepositoryConnector c = connector; c != null; c = c.parent) {
-            String credentials = c.repository.hasPassword() ? c.repository.getUserName() : "<anonymous>";
-            Log.debug("- %12s : %s (%s)", c.repository.getId(), c.repository.getURL(), credentials);
-        }
-        return connector;
-    }
 }

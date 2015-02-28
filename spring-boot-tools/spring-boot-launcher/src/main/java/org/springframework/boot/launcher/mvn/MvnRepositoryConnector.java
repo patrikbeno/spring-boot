@@ -19,17 +19,19 @@ import org.springframework.boot.launcher.MvnLauncherCfg;
 import org.springframework.boot.launcher.MvnLauncherException;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.util.StatusLine;
+import org.springframework.boot.loader.Launcher;
 import org.w3c.dom.Document;
 
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.xpath.XPath;
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.AccessDeniedException;
@@ -43,25 +45,27 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * @author Patrik Beno
  */
 public class MvnRepositoryConnector {
 
+    static private enum UrlConMethod { HEAD, GET }
+
+    static private final String USER_AGENT = String.format(
+            "SpringBoot-MvnLauncher/%s", Launcher.class.getPackage().getImplementationVersion());
+
     MvnRepository repository;
 
     MvnRepositoryConnector parent;
 
-    MvnRepositoryConnectorContext context;
+    ResolverContext context;
 
 	boolean connectionVerified = MvnLauncherCfg.offline.asBoolean();
 
-    public MvnRepositoryConnector(MvnRepository repository, MvnRepositoryConnectorContext context, MvnRepositoryConnector parent) {
+    public MvnRepositoryConnector(MvnRepository repository, ResolverContext context, MvnRepositoryConnector parent) {
         this.repository = repository;
         this.context = context;
         this.parent = parent;
@@ -80,7 +84,7 @@ public class MvnRepositoryConnector {
             if (repository.getURL().getProtocol().matches("https?")) {
                 try {
                     StatusLine.push("Verifying connection to %s", repository.getURL().getHost());
-                    URLConnection con = urlcon(repository.getURL(), false);
+                    URLConnection con = urlcon(repository.getURL(), false, UrlConMethod.HEAD, null);
                     con.setConnectTimeout(1000);
                     con.connect();
                     connectionVerified = true;
@@ -131,14 +135,9 @@ public class MvnRepositoryConnector {
             if (ma.getStatus() == null) { ma.setStatus(MvnArtifact.Status.Resolving); }
         }
 
-		Log.debug("Dependencies (alphabetical):");
-
-        List<Future<MvnArtifact>> tasks = new LinkedList<Future<MvnArtifact>>();
-
-        context.resolvers.submit(createProgressMonitor(sorted));
-
-		for (final MvnArtifact ma : sorted) {
-            tasks.add(context.resolvers.submit(new Callable<MvnArtifact>() {
+        List<Callable<MvnArtifact>> resolvers = new LinkedList<Callable<MvnArtifact>>();
+        for (final MvnArtifact ma : sorted) {
+            resolvers.add(new Callable<MvnArtifact>() {
                 @Override
                 public MvnArtifact call() throws Exception {
                     resolve(ma);
@@ -150,68 +149,10 @@ public class MvnRepositoryConnector {
                     }
                     return ma;
                 }
-            }));
-		}
-
-        int size = 0;
-        int downloaded = 0;
-        int errors = 0;
-        int warnings = 0;
-        int requests = 0;
-
-        try {
-            for (Future<MvnArtifact> f : tasks) {
-                MvnArtifact ma = f.get();
-                Log.log(toLevel(ma.getStatus()),
-                        "- %-12s: %-60s %s",
-                        ma.getStatus(), ma,
-                        ma.getRepositoryId() != null
-                                ? String.format("(%3dKB @%s)", ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : 0, ma.getRepositoryId())
-                                : ""
-                );
-                // update some stats
-                if (ma.isError()) { errors++; }
-                if (ma.isWarning()) { warnings++; }
-                if (ma.getFile() != null && ma.getFile().exists()) {
-                    size += ma.getFile().length();
-                }
-                downloaded += ma.downloaded;
-                requests += ma.requests;
-            }
-
-        } catch (InterruptedException e) {
-            throw new UnsupportedOperationException(e);
-        } catch (ExecutionException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        // if enabled, print some final report
-		if (!MvnLauncherCfg.quiet.asBoolean()) {
-			long elapsed = System.currentTimeMillis() - started;
-			Log.info(String.format(
-                    "Summary: %d archives, %d KB total (resolved in %d msec, downloaded %d KB in %d requests, %d KBps). Warnings/Errors: %d/%d.",
-                    artifacts.size(), size / 1024, elapsed, downloaded / 1024, requests,
-                    downloaded / 1024 * 1000 / elapsed,
-                    warnings, errors));
-		}
-
-		// if there are errors and fail-on-error property has not been reset, fail
-		if (MvnLauncherCfg.failOnError.asBoolean() && errors > 0) {
-			throw new MvnLauncherException(String.format(
-                    "%d errors resolving dependencies. Use --%s to view details or --%s to ignore these errors and continue",
-                    errors, MvnLauncherCfg.debug.name(), MvnLauncherCfg.failOnError.name()));
+            });
 		}
 
 	}
-
-    private Log.Level toLevel(MvnArtifact.Status status) {
-        switch (status) {
-            case NotFound:
-                return Log.Level.WRN;
-            default:
-                return Log.Level.DBG;
-        }
-    }
 
     /**
 	 * Resolve single artifact: download or update & verify. Most errors are reported via
@@ -227,58 +168,48 @@ public class MvnRepositoryConnector {
 	 */
 	public File resolve(final MvnArtifact artifact) {
 
-		if (artifact.getFile() != null && artifact.getFile().exists()) {
-			return artifact.getFile();
-		}
+        if (artifact.getFile() != null && artifact.getFile().exists()) {
+            return artifact.getFile();
+        }
 
-		// in case of snapshots, resolve the latest version
-		if (artifact.isSnapshot()) {
-			resolveSnapshotVersion(artifact);
-		}
+        // in case of snapshots, resolve the latest version
+        if (artifact.isSnapshot()) {
+            resolveSnapshotVersion(artifact);
+        }
 
-		// if the source is file://, there's no point caching it (unless forced)
-		if (repository.getURL().getProtocol().equals("file") && !MvnLauncherCfg.cacheFileProtocol.asBoolean()) {
-			try {
-				URL url = new URL(repository.getURL(), artifact.getPath());
-				return resource(artifact, MvnArtifact.Status.Cached, url, new File(url.getPath()), null);
-			}
-			catch (MalformedURLException e) {
-				throw new MvnLauncherException(e);
-			}
-		}
+        URLConnection con = null;
+        try {
+            // target file in cache
+            final File f = new File(context.cache, artifact.getPath());
+            final File fLastUpdated = getLastUpdatedMarkerFile(f);
+            final boolean expired = isExpired(fLastUpdated);
 
-		try {
-			// target file in cache
-			final File f = new File(context.cache, artifact.getPath());
-			final File fLastUpdated = getLastUpdatedMarkerFile(f);
-			final boolean expired = isExpired(fLastUpdated);
-
-			// in offline mode, artifact is either available or not; we're not doing
-			// anything about it
-			if (MvnLauncherCfg.offline.asBoolean()) {
-				return resource(
+            // in offline mode, artifact is either available or not; we're not doing
+            // anything about it
+            if (MvnLauncherCfg.offline.asBoolean()) {
+                return resource(
                         artifact,
                         f.exists() ? MvnArtifact.Status.Offline : MvnArtifact.Status.NotFound,
                         repository.getURL(), f,
                         f.exists() ? null : new FileNotFoundException(f.getAbsolutePath()));
-			}
+            }
 
-			// should we try to update the file?
-			boolean update = MvnLauncherCfg.update.asBoolean()
-					|| (artifact.isSnapshot() && MvnLauncherCfg.updateSnapshots.asBoolean() && expired)
-					|| (artifact.isRelease() && MvnLauncherCfg.updateReleases.asBoolean() && expired);
-			boolean nocache = MvnLauncherCfg.ignoreCache.asBoolean();
+            // should we try to update the file?
+            boolean update = MvnLauncherCfg.update.asBoolean()
+                    || (artifact.isSnapshot() && MvnLauncherCfg.updateSnapshots.asBoolean() && expired)
+                    || (artifact.isRelease() && MvnLauncherCfg.updateReleases.asBoolean() && expired);
+            boolean nocache = MvnLauncherCfg.ignoreCache.asBoolean();
 
-			// file is in cache already and update is disabled
-			if (f.exists() && !update && !nocache) {
-				return resource(artifact, MvnArtifact.Status.Cached, repository.getURL(), f, null);
-			}
+            // file is in cache already and update is disabled
+            if (f.exists() && !update && !nocache) {
+                return resource(artifact, MvnArtifact.Status.Cached, repository.getURL(), f, null);
+            }
 
-			// ok, we're going remote...
+            // ok, we're going remote...
 
-			// source URL
-			final URL url = new URL(repository.getURL(), artifact.getPath());
-			URLConnection con = urlcon(url);
+            // source URL
+            URL url = new URL(repository.getURL(), artifact.getPath());
+            con = urlcon(url, UrlConMethod.HEAD, null);
             boolean available = isAvailable(con);
 
             if (!available) {
@@ -287,44 +218,30 @@ public class MvnRepositoryConnector {
                         : resource(artifact, MvnArtifact.Status.NotFound, url, null, null);
             }
 
-			long lastModified = con.getLastModified();
+            final long lastModified = con.getLastModified();
 
-			// checking the cache: it the cached file is up to date, use it
-			if (f.exists() && f.lastModified() == lastModified && !nocache) {
-				return resource(artifact, MvnArtifact.Status.NotModified, url, f, null);
-			}
-
-			// cache miss or ignore, proceed to download
-            // use temp. file, rename after success
-            File tmp = new File(f.getParentFile(), UUID.randomUUID() + ".tmp");
-
-            // download
-            download(artifact, con, tmp);
-
-            // verify the checksum; report the errors if enabled
-            if (MvnLauncherCfg.verify.asBoolean() && !verify(tmp, url)) {
-                // invalid, drop it & report
-                Files.delete(tmp.toPath());
-                return resource(artifact, MvnArtifact.Status.Invalid, url, null, null);
+            // checking the cache: it the cached file is up to date, use it
+            if (f.exists() && f.lastModified() == lastModified && !nocache) {
+                return resource(artifact, MvnArtifact.Status.NotModified, url, f, null);
             }
 
-            // updated existing or downloaded new?
-            boolean updated = f.exists();
+            // cache miss or ignore, proceed to download
+            artifact.size = con.getContentLength();
 
-            // save
-            commit(tmp, f, lastModified);
+            // use temp. file, rename after success
+            final File tmp = new File(f.getParentFile(), UUID.randomUUID() + ".tmp");
 
-            // done, report result
-            MvnArtifact.Status status = (updated) ? MvnArtifact.Status.Updated : MvnArtifact.Status.Downloaded;
-            return resource(artifact, status, url, f, null);
+            artifact.con = con;
+            artifact.tmp = tmp;
 
+            return resource(artifact, MvnArtifact.Status.Downloadable, url, f, null);
+        } catch (IOException e) {
+            // infrastructure failure? just give up
+            throw new MvnLauncherException(e, "Error resolving " + artifact.asString());
+        } finally {
+            close(con);
         }
-        catch (IOException e) {
-			// infrastructure failure? just give up
-			throw new MvnLauncherException(e, "Error resolving " + artifact.asString());
-
-		}
-	}
+    }
 
     private boolean isAvailable(URLConnection con) {
         try { return con.getLastModified() > 0; } catch (Exception ignore) { return false; }
@@ -347,7 +264,47 @@ public class MvnRepositoryConnector {
 		}
 	}
 
-	void download(final MvnArtifact artifact, final URLConnection con, final File file) throws IOException {
+    File download(MvnArtifact artifact) throws IOException {
+
+        if (!artifact.getStatus().equals(MvnArtifact.Status.Downloadable)) {
+            return artifact.getFile();
+        }
+
+        URLConnection con = null;
+        try {
+            URL url = artifact.con.getURL();
+            con = urlcon(url, UrlConMethod.GET, null);
+
+            File tmp = artifact.tmp;
+            File f = artifact.getFile();
+
+            // download
+            download(artifact, con, tmp);
+
+            boolean isVerifyEnabled = MvnLauncherCfg.verify.asBoolean() && !url.getProtocol().equals("file");
+
+            // verify the checksum; report the errors if enabled
+            if (isVerifyEnabled && !verify(tmp, url)) {
+                // invalid, drop it & report
+                Files.delete(tmp.toPath());
+                return resource(artifact, MvnArtifact.Status.Invalid, url, null, null);
+            }
+
+            // updated existing or downloaded new?
+            boolean updated = f.exists();
+
+            // save
+            commit(tmp, f, con.getLastModified());
+
+            // done, report result
+            MvnArtifact.Status status = (updated) ? MvnArtifact.Status.Updated : MvnArtifact.Status.Downloaded;
+            return resource(artifact, status, url, f, null);
+        } finally {
+            close(con);
+        }
+    }
+
+    void download(final MvnArtifact artifact, final URLConnection con, final File file) throws IOException {
         artifact.setStatus(MvnArtifact.Status.Downloading);
         file.getParentFile().mkdirs();
         InputStream in = null;
@@ -360,7 +317,8 @@ public class MvnRepositoryConnector {
             artifact.setStatus(MvnArtifact.Status.Downloaded);
         }
         finally {
-            if (in != null) try { in.close(); } catch (IOException ignore) {}
+            close(in);
+            close(con);
             artifact.requests++;
         }
     }
@@ -389,45 +347,10 @@ public class MvnRepositoryConnector {
 	}
 
 	/**
-	 * Print out download status information every second until the operation is
-	 * completed. Only if the system console is available otherwise just silently wait for
-	 * asynchronous job completion.
-     * @param con
-     * @param artifact
-     * @param future async. job
-     * @param tmp temporary file where the data is being downloaded
-     * @param size total size of the download
-     */
-	private void monitorDownloadProgress(URLConnection con, MvnArtifact artifact, Future<?> future, File tmp, long size) throws IOException {
-        try {
-			while (!future.isDone()) {
-                long kb = size / 1024;
-                long pct = size > 0 ? tmp.length() * 100 / size : 0;
-                StatusLine.update(
-                        "Downloading %d%% (%d %s)",
-                        pct, (kb > 0? kb : size), (kb > 0 ? "KB" : "B"));
-                try { future.get(250, TimeUnit.MILLISECONDS); } catch (TimeoutException ignore) {}
-			}
-		}
-        catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-		}
-		catch (ExecutionException e) {
-            if (e.getCause() instanceof IOException) {
-                throw (IOException) e.getCause();
-            }
-            if (e.getCause() instanceof RuntimeException) {
-                throw (RuntimeException) e.getCause();
-            }
-            throw new MvnLauncherException(e);
-		}
-	}
-
-	/**
 	 * Populate internal structures of Maven artifact as needed, report status if enabled
 	 * @return cached file ready to use (if any)
 	 */
-	File resource(MvnArtifact artifact, MvnArtifact.Status status, URL source, File file, Throwable error) {
+	File resource(final MvnArtifact artifact, MvnArtifact.Status status, URL source, File file, Throwable error) {
 		artifact.setStatus(status);
 		artifact.setSource(source);
 		artifact.setFile(file);
@@ -445,63 +368,67 @@ public class MvnRepositoryConnector {
             artifact.setRepositoryId("cache");
 		case NotFound:
 		case Invalid:
+		case Downloadable:
 			break;
 		default:
 			throw new AssertionError(status);
 		}
 
-		return artifact.getFile();
+        return artifact.getFile();
 	}
 
 	/**
 	 * Resolve timestamped downloadable snapshot version of a given snapshot artifact
 	 */
 	void resolveSnapshotVersion(MvnArtifact artifact) {
+        URLConnection metadata = null;
         try {
-			// metadata: remote URL and cached local file
-			URL url = new URL(repository.getURL(), artifact.getPath());
-			URL murl = new URL(url, "maven-metadata.xml");
-			File mfile = new File(new File(context.cache, artifact.getPath()).getParentFile(), "maven-metadata.xml");
-			File fLastUpdated = getLastUpdatedMarkerFile(mfile);
+            // metadata: remote URL and cached local file
+            URL url = new URL(repository.getURL(), artifact.getPath());
+            URL murl = new URL(url, "maven-metadata.xml");
+            File mfile = new File(new File(context.cache, artifact.getPath()).getParentFile(), "maven-metadata.xml");
+            File fLastUpdated = getLastUpdatedMarkerFile(mfile);
 
-			final boolean expired = isExpired(fLastUpdated);
+            final boolean expired = isExpired(fLastUpdated);
 
-			// should we try and update?
-			boolean update = MvnLauncherCfg.update.asBoolean()
+            // should we try and update?
+            boolean update = MvnLauncherCfg.update.asBoolean()
                     || (MvnLauncherCfg.updateSnapshots.asBoolean() && expired
                     || MvnLauncherCfg.ignoreCache.asBoolean());
 
-			// metadata
-			URLConnection metadata = update ? urlcon(murl) : null;
-			long lastModified = update ? metadata.getLastModified() : mfile.lastModified();
+            // metadata
+            metadata = update ? urlcon(murl, UrlConMethod.GET, mfile.exists() ? mfile.lastModified() : null) : null;
+            long lastModified = (update && metadata.getLastModified() > 0)
+                    ? metadata.getLastModified()
+                    : mfile.lastModified();
             if (update) artifact.requests++;
 
-			// is our local copy up to date?
-			boolean recent = mfile.exists() && mfile.lastModified() >= lastModified;
+            // is our local copy up to date?
+            boolean recent = mfile.exists() && mfile.lastModified() >= lastModified;
 
-			if (!recent || update) {
+            if (!recent) {
                 File tmp = new File(mfile.getParentFile(), UUID.randomUUID().toString() + ".tmp");
                 download(artifact, metadata, tmp);
                 commit(tmp, mfile, lastModified);
-			}
+            }
 
-			// load latest snapshot version from metadata
-			String version = getSnapshotVersionFromMetadata(mfile);
+            // load latest snapshot version from metadata
+            String version = getSnapshotVersionFromMetadata(mfile);
 
-			// and set the result
-			artifact.setResolvedSnapshotVersion(artifact.getVersion().replaceFirst("SNAPSHOT$", version));
+            // and set the result
+            artifact.setResolvedSnapshotVersion(artifact.getVersion().replaceFirst("SNAPSHOT$", version));
 
-		}
-		catch (FileNotFoundException e) {
-			// no metadata, artifact probably does not exist
-			artifact.setError(e);
+        } catch (FileNotFoundException e) {
+            // no metadata, artifact probably does not exist
+            artifact.setError(e);
 
-		}
-		catch (IOException e) {
-			// nope, something went wrong
-            throw new MvnLauncherException(e, "Could not resolve snapshot version of "+artifact);
-		}
-	}
+        } catch (IOException e) {
+            // nope, something went wrong
+            throw new MvnLauncherException(e, "Could not resolve snapshot version of " + artifact);
+        } finally {
+            close(metadata);
+        }
+    }
 
 	private boolean isExpired(File f) {
 		final long lastUpdated = f.exists() ? f.lastModified() : 0;
@@ -537,40 +464,35 @@ public class MvnRepositoryConnector {
 	 */
 	boolean verify(File f, URL source) {
 
-		String ALG = "SHA1"; // or MD5
+        String ALG = "SHA1"; // or MD5
 
-		InputStream in = null;
-		try {
-			// construct checksum resoruce URL and open connection
-			URL url = new URL(source.toExternalForm() + "." + ALG.toLowerCase());
-			URLConnection con = urlcon(url);
-			in = con.getInputStream();
+        InputStream in = null;
+        URLConnection con = null;
+        try {
+            // construct checksum resoruce URL and open connection
+            URL url = new URL(source.toExternalForm() + "." + ALG.toLowerCase());
+            con = urlcon(url, UrlConMethod.GET, null);
+            in = con.getInputStream();
 
-			// load declared; QDH see
-			// https://weblogs.java.net/blog/pat/archive/2004/10/stupid_scanner_1.html
-			String declared = new Scanner(in, "ASCII").useDelimiter("\\A").next().trim();
-			// compute actual
-			String computed = getFileChecksum(f, ALG);
+            // load declared; QDH see
+            // https://weblogs.java.net/blog/pat/archive/2004/10/stupid_scanner_1.html
+            String declared = new Scanner(in, "ASCII").useDelimiter("\\A").next().trim();
+            // compute actual
+            String computed = getFileChecksum(f, ALG);
 
-			// compare/validate
-			return declared.equals(computed);
+            // compare/validate
+            return declared.equals(computed);
 
-		}
-		catch (IOException e) {
-			// uh-oh
-			throw new MvnLauncherException(e, "Error verifying " + f);
+        } catch (IOException e) {
+            // uh-oh
+            throw new MvnLauncherException(e, "Error verifying " + f);
 
-		}
-		finally {
-			// cleanup
-			if (in != null)
-				try {
-					in.close();
-				}
-				catch (IOException ignore) {
-				}
-		}
-	}
+        } finally {
+            // cleanup
+            close(in);
+            close(con);
+        }
+    }
 
 	/**
 	 * Compute checksum of a given file, using given algorithm, and convert it to
@@ -625,16 +547,24 @@ public class MvnRepositoryConnector {
 		}
 	}
 
-	private URLConnection urlcon(URL url) {
-		return urlcon(url, !connectionVerified);
+	private URLConnection urlcon(URL url, UrlConMethod method, Long ifModifiedSince) {
+		return urlcon(url, !connectionVerified, method, ifModifiedSince);
 	}
 
-	private URLConnection urlcon(URL url, boolean verify) {
+	private URLConnection urlcon(URL url, boolean verify, UrlConMethod method, Long ifModifiedSince) {
 		if (verify) {
 			verifyConnection();
 		}
 		try {
 			URLConnection con = url.openConnection();
+
+            if (con instanceof HttpURLConnection) {
+                HttpURLConnection hcon = (HttpURLConnection) con;
+                hcon.setRequestProperty("User-Agent", USER_AGENT);
+                hcon.setRequestMethod(method.name());
+                if (ifModifiedSince != null) { hcon.setIfModifiedSince(ifModifiedSince); }
+            }
+
             // credentials are lazily initialized in #verifyConnection()
 			if (repository != null && repository.hasPassword()) {
 				String auth = String.format("%s:%s", repository.getUserName(), repository.getPassword());
@@ -649,60 +579,17 @@ public class MvnRepositoryConnector {
 		}
 	}
 
-	URL urlWithUserName(URL url, String username) {
-		if (username == null) {
-			return url;
-		}
-		try {
-			return new URL(String.format("%s://%s@%s%s", url.getProtocol(), username,
-					url.getHost(), url.getFile()));
-		}
-		catch (MalformedURLException e) {
-			throw new AssertionError(e);
-		}
-	}
-
-    private Runnable createProgressMonitor(final List<MvnArtifact> sorted) {
-        return new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    StatusLine.push("Resolving dependencies...");
-                    while (!Thread.currentThread().isInterrupted()) {
-                        int completed = 0;
-                        long downloaded = 0;
-                        long size = 0;
-                        for (MvnArtifact ma : sorted) {
-                            switch (ma.getStatus()) {
-                                case Resolving:
-                                    break;
-                                case Downloading:
-                                    downloaded += ma.getFile().length();
-                                    size += ma.size;
-                                    break;
-                                default:
-                                    downloaded += ma.downloaded;
-                                    size += ma.size;
-                                    completed++;
-                            }
-                        }
-                        StatusLine.update(
-                                "Resolving dependencies %d/%d (%d KB / %d%%) %s",
-                                completed, sorted.size(), downloaded / 1024, size>0 ? downloaded*100/size : 100,
-                                MvnLauncherCfg.debug.asBoolean() ? "" : "\033[0m(Use --debug to see more)");
-                        try {
-                            Thread.sleep(500);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                } catch (RuntimeException e) {
-                    e.printStackTrace();
-                } finally {
-                    StatusLine.pop();
-                }
-            }
-        };
+    void close(URLConnection con) {
+        if (con != null && con instanceof HttpURLConnection) {
+            ((HttpURLConnection) con).disconnect();
+        }
     }
+
+    void close(Closeable closeable) {
+        if (closeable != null) {
+            try { closeable.close(); } catch (IOException ignore) {}
+        }
+    }
+
 
 }

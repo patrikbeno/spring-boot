@@ -14,7 +14,7 @@ public class MvnRepositoryConnectorTest extends AbstractTest {
 	@Test
 	public void test() {
 		MvnArtifact a = new MvnArtifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
-        MvnRepositoryConnectorContext context = new MvnRepositoryConnectorContext();
+        ResolverContext context = new ResolverContext(a);
         try {
             MvnRepositoryConnector c = new MvnRepositoryConnector(MvnRepository.forRepositoryId("default"), context, null);
             c.resolveSnapshotVersion(a);

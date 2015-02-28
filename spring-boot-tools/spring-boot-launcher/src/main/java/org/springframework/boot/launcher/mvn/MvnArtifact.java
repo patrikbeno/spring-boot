@@ -15,17 +15,18 @@
  */
 package org.springframework.boot.launcher.mvn;
 
+import org.springframework.boot.loader.archive.Archive;
+import org.springframework.boot.loader.archive.JarFileArchive;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import org.springframework.boot.loader.archive.Archive;
-import org.springframework.boot.loader.archive.JarFileArchive;
 
 /**
  * @author Patrik Beno
@@ -42,9 +43,9 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 
 	// note: naming convention broken intentionally for simplicity; these enums are also
 	// used for debug logging, and
-	// the output looks better in CamelCase that UPPER_CASE.
+	// the output looks better in CamelCase than UPPER_CASE.
 	static public enum Status {
-		Resolving, NotModified, Downloading, Downloaded, Updated, Cached, Offline, NotFound, Invalid
+		Resolving, Resolved, NotModified, Downloadable, Downloading, Downloaded, Updated, Cached, Offline, NotFound, Invalid
 	}
 
 
@@ -60,6 +61,8 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 
 	private Throwable error; // resolver error, if any (for reporting purposes)
 
+    public URLConnection con;
+    public File tmp;
     public long size;
     public long downloaded;
     public int requests;

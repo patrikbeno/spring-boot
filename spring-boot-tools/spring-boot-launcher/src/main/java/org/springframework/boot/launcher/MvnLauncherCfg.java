@@ -15,7 +15,11 @@
  */
 package org.springframework.boot.launcher;
 
-import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
+import org.springframework.boot.launcher.mvn.MvnArtifact;
+import org.springframework.boot.launcher.util.Log;
+import org.springframework.boot.launcher.util.StatusLine;
+import org.springframework.boot.loader.Launcher;
+import org.springframework.boot.loader.util.SystemPropertyUtils;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -32,14 +36,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import org.springframework.boot.launcher.mvn.MvnArtifact;
-import org.springframework.boot.launcher.mvn.MvnLauncher;
-import org.springframework.boot.launcher.mvn.MvnRepository;
-import org.springframework.boot.launcher.util.Log;
-import org.springframework.boot.launcher.util.StatusLine;
-import org.springframework.boot.launcher.vault.Vault;
-import org.springframework.boot.loader.Launcher;
-import org.springframework.boot.loader.util.SystemPropertyUtils;
+import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
 
 /**
  * MvnLauncher bootstrap configuration (loaded from external properties file or system
@@ -164,13 +161,6 @@ public enum MvnLauncherCfg {
 	failOnError(true),
 
 	/**
-	 * By default file:// repository is used directly and artifacts are not cached in
-	 * launcher cache. You may want to enable file:// protocol caching if you have
-	 * concurrency issues using your file:// based repository.
-	 */
-	cacheFileProtocol(false),
-
-	/**
 	 * Once downloaded, release is considered immutable and not subject to change/update
 	 * (default). Override this flag to make launcher check for remote updates of releases
 	 * (this usually leads to slower application startup and {@code NotModified} statuses
@@ -203,15 +193,9 @@ public enum MvnLauncherCfg {
 	 */
 	update(false),
 
-    /**
-     * Maximum number of concurrent artifact resolvers.
-     */
-    resolvers("15"),
+    resolvers("7"),
 
-    /**
-     * Maximum number of concurrent artifact downloaders. Download is triggered by a resolver.
-     */
-    downloaders("5"),
+    downloaders("3"),
 
     ;
 
@@ -323,15 +307,6 @@ public enum MvnLauncherCfg {
 	// /
 
     static private void validate() {
-        if (downloaders.asInt() < 1) {
-            downloaders.set("1");
-        }
-        if (downloaders.asInt() > 50) {
-            downloaders.set("50");
-        }
-        if (resolvers.asInt() <= downloaders.asInt()) {
-            resolvers.set(Integer.toString(downloaders.asInt() * 2));
-        }
     }
 
 	static public void configure() {
