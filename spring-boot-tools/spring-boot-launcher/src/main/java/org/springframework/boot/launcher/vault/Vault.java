@@ -232,7 +232,6 @@ public class Vault {
 
     private void loadReadable() {
         if (data == null) { data = loadProperties(); }
-        if (key == null) { key = loadPrivateKey(); }
     }
 
     private void loadWritable() {

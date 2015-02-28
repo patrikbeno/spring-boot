@@ -17,6 +17,7 @@ package org.springframework.boot.launcher.mvn;
 
 import org.springframework.boot.launcher.MvnLauncherCfg;
 import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.util.IOHelper;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.util.StatusLine;
 import org.springframework.boot.loader.ExecutableArchiveLauncher;
@@ -89,6 +90,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 			List<URL> urls = new ArrayList<URL>(archives.size());
 			for (Archive archive : archives) {
 				urls.add(archive.getUrl());
+                IOHelper.close(archive);
 			}
 			ClassLoader cl = new LaunchedURLClassLoader(urls.toArray(new URL[urls.size()]), parent);
 			return cl;
@@ -96,9 +98,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 		catch (Exception e) {
 			throw new MvnLauncherException(e,
 					"Cannot resolve artifact or its dependencies: " + artifact.asString());
-		} finally {
-            System.gc();
-        }
+		}
 	}
 
     public ClassLoader resolve(MvnArtifact artifact, ClassLoader parent) {

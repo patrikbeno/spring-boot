@@ -21,6 +21,8 @@ public class Log {
         }
     }
 
+    static private final long STARTED = System.currentTimeMillis();
+
     static public boolean isDebug() {
         return MvnLauncherCfg.isDebugEnabled();
     }
@@ -65,7 +67,7 @@ public class Log {
     static private synchronized void log(final PrintStream out, Level level, String message, Object ... args) {
         StatusLine.resetLine();
         out.print(level.ansi);
-        out.printf("[%s] ", level);
+        out.printf("%4d [%s] ", System.currentTimeMillis() - STARTED, level);
         out.printf(message, args);
         out.print("\033[0m");
         out.println();

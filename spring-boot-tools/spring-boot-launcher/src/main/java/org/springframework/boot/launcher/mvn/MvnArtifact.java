@@ -183,9 +183,15 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 
 	public String asString() {
 		String resolvedVersion = Objects.toString(resolvedSnapshotVersion, getVersion());
-		return (getClassifier() != null) ? String.format("%s:%s:%s:%s:%s", getGroupId(),
-				getArtifactId(), resolvedVersion, getPackaging(), getClassifier()) : String.format(
-				"%s:%s:%s:%s", getGroupId(), getArtifactId(), resolvedVersion, getPackaging());
+        StringBuilder sb = new StringBuilder()
+                .append(getGroupId()).append(':')
+                .append(getArtifactId()).append(':')
+                .append(resolvedVersion).append(':')
+                .append(getPackaging());
+        if (getClassifier() != null) {
+            sb.append(':').append(getClass());
+        }
+        return sb.toString();
 	}
 
 	/**
@@ -193,15 +199,19 @@ public class MvnArtifact extends org.springframework.boot.loader.archive.MvnArti
 	 * @return
 	 */
 	public String getPath() {
-		String sversion = (resolvedSnapshotVersion != null && !resolvedSnapshotVersion
-				.isEmpty()) ? resolvedSnapshotVersion : getVersion();
-		String path = (getClassifier() != null) ? String.format(
-				"%1$s/%2$s/%3$s/%2$s-%4$s-%5$s.%6$s", getGroupId().replace('.', '/'),
-				getArtifactId(), getVersion(), sversion, getClassifier(), getPackaging()) : String.format(
-				"%1$s/%2$s/%3$s/%2$s-%4$s.%5$s", getGroupId().replace('.', '/'), getArtifactId(),
-				getVersion(), sversion, getPackaging());
-		return path;
-
+		String sversion = (resolvedSnapshotVersion != null && !resolvedSnapshotVersion.isEmpty())
+                ? resolvedSnapshotVersion
+                : getVersion();
+        StringBuilder sb = new StringBuilder()
+                .append(getGroupId().replace('.', '/')).append('/')
+                .append(getArtifactId()).append('/')
+                .append(getVersion()).append('/')
+                .append(getArtifactId()).append('-').append(sversion);
+        if (getClassifier() != null) {
+            sb.append('-').append(getClassifier());
+        }
+        sb.append('.').append(getPackaging());
+		return sb.toString();
 	}
 
     public URL getUrl() {

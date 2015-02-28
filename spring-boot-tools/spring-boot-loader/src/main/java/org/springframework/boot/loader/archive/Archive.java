@@ -16,6 +16,10 @@
 
 package org.springframework.boot.loader.archive;
 
+import org.springframework.boot.loader.Launcher;
+import org.springframework.boot.loader.util.AsciiBytes;
+
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -23,16 +27,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.jar.Manifest;
 
-import org.springframework.boot.loader.Launcher;
-import org.springframework.boot.loader.util.AsciiBytes;
-
 /**
  * An archive that can be launched by the {@link Launcher}.
  *
  * @author Phillip Webb
  * @see JarFileArchive
  */
-public abstract class Archive {
+public abstract class Archive implements Closeable {
 
 	/**
 	 * Returns a URL that can be used to load the archive.
@@ -151,4 +152,7 @@ public abstract class Archive {
 
 	}
 
+    @Override
+    public void close() throws IOException {
+    }
 }

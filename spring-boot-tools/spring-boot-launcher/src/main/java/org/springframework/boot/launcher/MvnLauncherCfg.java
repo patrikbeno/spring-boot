@@ -246,8 +246,8 @@ public enum MvnLauncherCfg {
 	 * properties use common {@code MvnLauncher.*} prefix
 	 */
 	public String getPropertyName() {
-		return String.format("MvnLauncher.%s", name());
-	}
+        return "MvnLauncher." + name();
+    }
 
 	/**
 	 * Returns {@code true} if the property value is defined (i.e. not null)

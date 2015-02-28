@@ -18,6 +18,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.jar.Manifest;
 
+import static org.springframework.boot.launcher.util.IOHelper.close;
+
 /**
  * @author <a href="mailto:patrikbeno@gmail.com">Patrik Beno</a>
  */
@@ -105,10 +107,13 @@ public class Resolver {
     }
 
     private void resolveMainClassAndDependencies() {
-        if (this.dependencies != null) { return; }
+        if (this.dependencies != null) {
+            return;
+        }
+        JarFileArchive jar = null;
         try {
             File f = download().get().getArtifact().getFile();
-            JarFileArchive jar = new JarFileArchive(f);
+            jar = new JarFileArchive(f);
             this.mainClass = jar.getMainClass();
             this.dependencies = getArtifacts(jar);
 
@@ -121,6 +126,8 @@ public class Resolver {
 
         } catch (Exception e) {
             throw new UnsupportedOperationException(e);
+        } finally {
+            close(jar);
         }
     }
 

@@ -25,7 +25,6 @@ import org.w3c.dom.Document;
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.xpath.XPath;
-import java.io.Closeable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -46,6 +45,8 @@ import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+
+import static org.springframework.boot.launcher.util.IOHelper.close;
 
 /**
  * @author Patrik Beno
@@ -82,17 +83,17 @@ public class MvnRepositoryConnector {
 
             // check http:// and https:// repositories: must be able to connect successfully
             if (repository.getURL().getProtocol().matches("https?")) {
+                URLConnection con = null;
+                StatusLine.push("Verifying connection to %s", repository.getURL().getHost());
                 try {
-                    StatusLine.push("Verifying connection to %s", repository.getURL().getHost());
-                    URLConnection con = urlcon(repository.getURL(), false, UrlConMethod.HEAD, null);
+                    con = urlcon(repository.getURL(), false, UrlConMethod.HEAD, null);
                     con.setConnectTimeout(1000);
                     con.connect();
                     connectionVerified = true;
-                }
-                catch (IOException e) {
+                } catch (IOException e) {
                     throw new MvnLauncherException(e, "Invalid or misconfigured repository " + repository.getURL());
-                }
-                finally {
+                } finally {
+                    close(con);
                     StatusLine.pop();
                 }
 
@@ -244,7 +245,10 @@ public class MvnRepositoryConnector {
     }
 
     private boolean isAvailable(URLConnection con) {
-        try { return con.getLastModified() > 0; } catch (Exception ignore) { return false; }
+        try {
+            return con != null && con.getLastModified() > 0;
+        }
+        catch (Exception ignore) { return false; }
     }
 
     private File getLastUpdatedMarkerFile(File f) {
@@ -397,10 +401,11 @@ public class MvnRepositoryConnector {
                     || MvnLauncherCfg.ignoreCache.asBoolean());
 
             // metadata
-            metadata = update ? urlcon(murl, UrlConMethod.GET, mfile.exists() ? mfile.lastModified() : null) : null;
-            long lastModified = (update && metadata.getLastModified() > 0)
-                    ? metadata.getLastModified()
-                    : mfile.lastModified();
+            if (update) {
+                metadata = urlcon(murl, UrlConMethod.GET, mfile.exists() ? mfile.lastModified() : null);
+                metadata.connect();
+            }
+            long lastModified = isAvailable(metadata) ? metadata.getLastModified() : mfile.lastModified();
             if (update) artifact.requests++;
 
             // is our local copy up to date?
@@ -578,18 +583,6 @@ public class MvnRepositoryConnector {
 			throw new MvnLauncherException(e, "Error opening connection " + url);
 		}
 	}
-
-    void close(URLConnection con) {
-        if (con != null && con instanceof HttpURLConnection) {
-            ((HttpURLConnection) con).disconnect();
-        }
-    }
-
-    void close(Closeable closeable) {
-        if (closeable != null) {
-            try { closeable.close(); } catch (IOException ignore) {}
-        }
-    }
 
 
 }

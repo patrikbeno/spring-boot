@@ -16,6 +16,12 @@
 
 package org.springframework.boot.loader.archive;
 
+import org.springframework.boot.loader.data.RandomAccessData.ResourceAccess;
+import org.springframework.boot.loader.jar.JarEntryData;
+import org.springframework.boot.loader.jar.JarEntryFilter;
+import org.springframework.boot.loader.jar.JarFile;
+import org.springframework.boot.loader.util.AsciiBytes;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -29,12 +35,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.Manifest;
-
-import org.springframework.boot.loader.data.RandomAccessData.ResourceAccess;
-import org.springframework.boot.loader.jar.JarEntryData;
-import org.springframework.boot.loader.jar.JarEntryFilter;
-import org.springframework.boot.loader.jar.JarFile;
-import org.springframework.boot.loader.util.AsciiBytes;
 
 /**
  * {@link Archive} implementation backed by a {@link JarFile}.
@@ -188,4 +188,8 @@ public class JarFileArchive extends Archive {
 
 	}
 
+    @Override
+    public void close() throws IOException {
+        jarFile.close();
+    }
 }
