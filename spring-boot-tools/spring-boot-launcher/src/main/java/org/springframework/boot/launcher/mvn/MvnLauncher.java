@@ -158,6 +158,8 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 
                 count = resolvers.size();
 
+                this.mainClass = main.mainClass;
+
             } finally {
                 context.stopProgressMonitor();
             }
