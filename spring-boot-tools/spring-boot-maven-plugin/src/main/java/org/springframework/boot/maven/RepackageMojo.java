@@ -16,15 +16,6 @@
 
 package org.springframework.boot.maven;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
-import java.util.jar.JarFile;
-
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -42,6 +33,15 @@ import org.springframework.boot.loader.tools.Layouts;
 import org.springframework.boot.loader.tools.Libraries;
 import org.springframework.boot.loader.tools.Repackager;
 import org.springframework.util.StringUtils;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
+import java.util.jar.JarFile;
 
 /**
  * Repackages existing JAR and WAR archives so that they can be executed from the command
@@ -197,7 +197,7 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 		for (Artifact d : project.getArtifacts()) {
 			if (!scopes.contains(d.getScope())) { continue; }
 			MvnArtifact mvnuri = new MvnArtifact(
-					d.getGroupId(), d.getArtifactId(), d.getVersion(), d.getType(), d.getClassifier());
+					d.getGroupId(), d.getArtifactId(), d.getBaseVersion(), d.getType(), d.getClassifier());
 			mvnuris.add(mvnuri);
 		}
 		return new ArrayList<MvnArtifact>(mvnuris);
