@@ -42,6 +42,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -149,10 +150,16 @@ public class Vault {
         return cert != null || certFile.exists() && certFile.canRead() && dataFile.exists() && dataFile.canWrite();
     }
 
+    public Set<String> getPropertyNames() {
+        VaultPermission.READ_PERMISSION.check();
+        loadReadable();
+        return data.stringPropertyNames();
+    }
+
     public boolean containsKey(String key) {
         VaultPermission.READ_PERMISSION.check();
         loadReadable();
-        return data.getProperty(key) != null || parent.containsKey(key);
+        return data.getProperty(key) != null || (parent != null && parent.containsKey(key));
     }
 
     public void setProperty(String key, String value) {
