@@ -481,7 +481,9 @@ public class MvnRepositoryConnector {
 
             // load declared; QDH see
             // https://weblogs.java.net/blog/pat/archive/2004/10/stupid_scanner_1.html
-            String declared = new Scanner(in, "ASCII").useDelimiter("\\A").next().trim();
+            // also, some non-standard SHA1 sums files have ignorable suffixes that need to be stripped, hence
+            // the final regexp (e.g. http://goo.gl/JbfT2P)
+            String declared = new Scanner(in, "ASCII").useDelimiter("\\A").next().trim().replaceFirst("[ \t].*", "");
             // compute actual
             String computed = getFileChecksum(f, ALG);
 
