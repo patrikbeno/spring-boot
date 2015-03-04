@@ -50,7 +50,6 @@ public class Main {
 
     static {
         UrlSupport.init();
-        exportRepositoryDefaults();
     }
 
 	/**
@@ -135,26 +134,6 @@ public class Main {
             scanner.useDelimiter("\\Z");
             String s = scanner.next();
             System.out.println(s);
-        } finally {
-            if (in != null) try { in.close(); } catch (IOException ignore) {}
-        }
-    }
-
-    static protected void exportRepositoryDefaults() {
-        InputStream in = null;
-        try {
-            Properties system = System.getProperties();
-            in = Main.class.getResourceAsStream("repo-defaults.properties");
-            Properties defaults = new Properties();
-            defaults.load(in);
-            Enumeration<?> names = defaults.propertyNames();
-            while (names.hasMoreElements()) {
-                String name = (String) names.nextElement();
-                if (!system.containsKey(name)) {
-                    system.setProperty(name, defaults.getProperty(name));
-                }
-            }
-        } catch (IOException ignore) {
         } finally {
             if (in != null) try { in.close(); } catch (IOException ignore) {}
         }

@@ -30,12 +30,15 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePlaceholders;
 
 /**
@@ -91,7 +94,7 @@ public enum MvnLauncherCfg {
      * Defaults: github,central (repository URLs are automatically exported to system properties if undefined, hence
      * providing fallback in case of missing configuration)
      */
-    repositories("greenhorn,central"),
+    repositories("central,greenhorn"),
 
     /**
      * Launcher cache directory. Defaults to {@code $ user.home}/.springboot/cache}
@@ -306,15 +309,29 @@ public enum MvnLauncherCfg {
 
 	// /
 
-    static private void validate() {
+    static {
+        exportRepositoryDefaults();
     }
 
-	static public void configure() {
-		String version = Launcher.class.getPackage().getImplementationVersion();
+    static public void init() {}
 
-		Log.debug("Configuring SpringBoot MvnLauncher %s", (version != null ? version : "(unknown version)"));
+    static private void validate() {
+        fix(resolvers, 1, 30);
+        fix(downloaders, 1, 10);
+        fix(updateInterval, 0, Integer.MAX_VALUE);
+    }
 
-		Properties props = properties(MvnLauncherCfg.defaults.get().split(","));
+    static public void configure() {
+
+        if (!quiet.asBoolean()) {
+            String version = Launcher.class.getPackage().getImplementationVersion();
+            Log.info("SpringBoot MvnLauncher %s", (version != null ? version : "(unknown version)"));
+        }
+
+        // export defaults
+        export();
+
+        Properties props = properties(MvnLauncherCfg.defaults.get().split(","));
 
 		// propagate all yet undefined foreign properties from loaded resources into
 		// system properties
@@ -420,7 +437,7 @@ public enum MvnLauncherCfg {
 			if (isDirectory && !surl.endsWith("/")) {
 				surl += "/";
 			}
-			String resolved = resolvePlaceholders(surl).replace('.', '/');
+			String resolved = resolvePlaceholders(surl).replace('\\', '/');
 			return new URL(resolved);
 		}
 		catch (MalformedURLException e) {
@@ -428,7 +445,38 @@ public enum MvnLauncherCfg {
 		}
 	}
 
-	///
+    private static void fix(MvnLauncherCfg cfg, int min, int max) {
+        int actual = cfg.asInt();
+        int adjusted = min(max(actual, min), max);
+        if (actual != adjusted) {
+            cfg.set(Integer.toString(adjusted));
+            Log.warn("Adjusting invalid or out of range configuration value: --%s=%s (was: %s)", cfg.name(), adjusted, actual);
+        }
+    }
+
+    static protected void exportRepositoryDefaults() {
+        InputStream in = null;
+        try {
+            Properties system = System.getProperties();
+            in = Main.class.getResourceAsStream("repo-defaults.properties");
+            Properties defaults = new Properties();
+            defaults.load(in);
+            Enumeration<?> names = defaults.propertyNames();
+            while (names.hasMoreElements()) {
+                String name = (String) names.nextElement();
+                if (!system.containsKey(name)) {
+                    system.setProperty(name, defaults.getProperty(name));
+                }
+            }
+        } catch (IOException ignore) {
+        } finally {
+            if (in != null) try { in.close(); } catch (IOException ignore) {}
+        }
+    }
+
+
+
+    ///
 
 	@Override
 	public String toString() {
