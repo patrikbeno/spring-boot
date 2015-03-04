@@ -360,23 +360,25 @@ public class MvnRepositoryConnector {
 		artifact.setFile(file);
 		if (error != null && artifact.getError() == null) { artifact.setError(error); }
 
-		switch (status) {
-		case Downloaded:
-		case Updated:
-		case NotModified:
-            artifact.setRepositoryId(repository.getId());
-			rememberLastUpdateTime(getLastUpdatedMarkerFile(file), System.currentTimeMillis());
-			break;
-		case Cached:
-        case Offline:
-            artifact.setRepositoryId("cache");
-		case NotFound:
-		case Invalid:
-		case Downloadable:
-			break;
-		default:
-			throw new AssertionError(status);
-		}
+        switch (status) {
+            case Downloadable:
+                artifact.setRepositoryId(repository.getId());
+                break;
+            case Downloaded:
+            case Updated:
+            case NotModified:
+                artifact.setRepositoryId(repository.getId());
+                rememberLastUpdateTime(getLastUpdatedMarkerFile(file), System.currentTimeMillis());
+                break;
+            case Cached:
+            case Offline:
+                artifact.setRepositoryId("cache");
+            case Invalid:
+            case NotFound:
+                break;
+            default:
+                throw new AssertionError(status);
+        }
 
         return artifact.getFile();
 	}
