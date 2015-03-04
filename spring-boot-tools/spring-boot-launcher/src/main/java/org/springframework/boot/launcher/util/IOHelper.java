@@ -16,6 +16,12 @@ public class IOHelper {
         }
     }
 
+    static public void close(AutoCloseable closeable) {
+        if (closeable != null) {
+            try { closeable.close(); } catch (Exception ignore) {}
+        }
+    }
+
     static public void close(URLConnection con) {
         if (con != null && con instanceof HttpURLConnection) {
             ((HttpURLConnection) con).disconnect();

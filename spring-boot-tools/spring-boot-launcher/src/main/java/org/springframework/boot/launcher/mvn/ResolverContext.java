@@ -64,12 +64,12 @@ public class ResolverContext implements AutoCloseable {
 
     }
 
-    void startProgressMonitor() {
+    public void startProgressMonitor() {
         StatusLine.push("Resolving dependencies");
         progress.scheduleAtFixedRate(createProgressMonitor(), 0, 500, TimeUnit.MILLISECONDS);
     }
 
-    void stopProgressMonitor() {
+    public void stopProgressMonitor() {
         progress.shutdownNow();
         StatusLine.pop();
     }
