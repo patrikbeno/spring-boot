@@ -24,6 +24,13 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-loader</artifactId>
 			<version>${project.version}</version>
+            <scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-context</artifactId>
+			<version>${spring.version}</version>
+            <scope>provided</scope>
 		</dependency>
 	</dependencies>
 
@@ -42,7 +49,7 @@
 						<configuration>
 							<layout>JAR</layout>
 							<mainClass>org.springframework.boot.launcher.Main</mainClass>
-							<excludeArtifactIds>spring-boot-loader</excludeArtifactIds>
+                            <excludeProvided>true</excludeProvided>
 						</configuration>
 					</execution>
 				</executions>
