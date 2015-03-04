@@ -27,6 +27,8 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.apache.maven.shared.artifact.filter.collection.FilterArtifacts;
+import org.apache.maven.shared.artifact.filter.collection.ScopeFilter;
 import org.springframework.boot.loader.archive.MvnArtifact;
 import org.springframework.boot.loader.tools.Layout;
 import org.springframework.boot.loader.tools.Layouts;
@@ -129,6 +131,13 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 	@Parameter
 	private List<Dependency> requiresUnpack;
 
+    /**
+     * Artifacts with scope:provided should be excluded. This option enables such filtering.
+     * For backward compatibility, default is "disabled".
+     */
+    @Parameter
+    private boolean excludeProvided;
+
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException {
 		if (this.project.getPackaging().equals("pom")) {
@@ -166,8 +175,10 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 			repackager.setLayout(this.layout.layout());
 		}
 
-		Set<Artifact> artifacts = filterDependencies(this.project.getArtifacts(),
-				getFilters());
+        FilterArtifacts additionalFilters = excludeProvided
+                ? getFilters(new ScopeFilter(null, "provided"))
+                : getFilters();
+        Set<Artifact> artifacts = filterDependencies(this.project.getArtifacts(), additionalFilters);
 
 		Libraries libraries = new ArtifactsLibraries(artifacts, this.requiresUnpack,
 				getLog());
