@@ -29,6 +29,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
+import org.mockito.Answers;
 import org.springframework.boot.loader.tools.sample.ClassWithMainMethod;
 import org.springframework.boot.loader.tools.sample.ClassWithoutMainMethod;
 import org.springframework.util.FileCopyUtils;
@@ -178,22 +179,19 @@ public class RepackagerTests {
 		repackager.setLayout(new Layouts.None());
 		repackager.repackage(file, NO_LIBRARIES);
 		Manifest actualManifest = getManifest(file);
-		assertThat(actualManifest.getMainAttributes().getValue("Main-Class"),
-				equalTo("a.b.C"));
+		assertThat(actualManifest.getMainAttributes().getValue("Main-Class"), equalTo(null));
 		assertThat(hasLauncherClasses(file), equalTo(false));
 	}
 
 	@Test
 	public void noMainClassAndLayoutIsNoneWithNoMain() throws Exception {
 		this.testJarFile.addClass("a/b/C.class", ClassWithoutMainMethod.class);
+        this.thrown.expect(IllegalStateException.class);
+        this.thrown.expectMessage("Unable to find main class");
 		File file = this.testJarFile.getFile();
 		Repackager repackager = new Repackager(file);
 		repackager.setLayout(new Layouts.None());
 		repackager.repackage(file, NO_LIBRARIES);
-		Manifest actualManifest = getManifest(file);
-		assertThat(actualManifest.getMainAttributes().getValue("Main-Class"),
-				equalTo(null));
-		assertThat(hasLauncherClasses(file), equalTo(false));
 	}
 
 	@Test
@@ -327,6 +325,7 @@ public class RepackagerTests {
 		File file = this.testJarFile.getFile();
 		Repackager repackager = new Repackager(file);
 		Layout layout = mock(Layout.class);
+        given(layout.isExecutable()).willReturn(true);
 		final LibraryScope scope = mock(LibraryScope.class);
 		given(layout.getLauncherClassName()).willReturn("testLauncher");
 		given(layout.getLibraryDestination(anyString(), eq(scope))).willReturn("test/");
