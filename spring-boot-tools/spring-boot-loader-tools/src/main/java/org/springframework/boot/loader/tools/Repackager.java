@@ -266,10 +266,8 @@ public class Repackager {
 		}
 
 		// executable layouts must have both launcher and start class
-		// non-executable need must have a start class
-		boolean isValid = layout.isExecutable()
-				? (launcherClassName != null && startClass != null)
-				: (startClass != null);
+		// non-executable have no restriction
+		boolean isValid = !layout.isExecutable() || (launcherClassName != null && startClass != null);
 		if (!isValid) {
 			throw new IllegalStateException("Unable to find main class");
 		}

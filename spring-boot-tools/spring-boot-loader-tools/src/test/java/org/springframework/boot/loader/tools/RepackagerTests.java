@@ -171,28 +171,29 @@ public class RepackagerTests {
 		new Repackager(this.testJarFile.getFile()).repackage(NO_LIBRARIES);
 	}
 
-	@Test
-	public void noMainClassAndLayoutIsNone() throws Exception {
-		this.testJarFile.addClass("a/b/C.class", ClassWithMainMethod.class);
-		File file = this.testJarFile.getFile();
-		Repackager repackager = new Repackager(file);
-		repackager.setLayout(new Layouts.None());
-		repackager.repackage(file, NO_LIBRARIES);
-		Manifest actualManifest = getManifest(file);
-		assertThat(actualManifest.getMainAttributes().getValue("Main-Class"), equalTo(null));
-		assertThat(hasLauncherClasses(file), equalTo(false));
-	}
+    @Test
+    public void noMainClassAndLayoutIsNone() throws Exception {
+        this.testJarFile.addClass("a/b/C.class", ClassWithMainMethod.class);
+        File file = this.testJarFile.getFile();
+        Repackager repackager = new Repackager(file);
+        repackager.setLayout(new Layouts.None());
+        repackager.repackage(file, NO_LIBRARIES);
+        Manifest actualManifest = getManifest(file);
+        assertThat(actualManifest.getMainAttributes().getValue("Main-Class"), equalTo(null));
+        assertThat(hasLauncherClasses(file), equalTo(false));
+    }
 
-	@Test
-	public void noMainClassAndLayoutIsNoneWithNoMain() throws Exception {
-		this.testJarFile.addClass("a/b/C.class", ClassWithoutMainMethod.class);
-        this.thrown.expect(IllegalStateException.class);
-        this.thrown.expectMessage("Unable to find main class");
-		File file = this.testJarFile.getFile();
-		Repackager repackager = new Repackager(file);
-		repackager.setLayout(new Layouts.None());
-		repackager.repackage(file, NO_LIBRARIES);
-	}
+    @Test
+    public void noMainClassAndLayoutIsNoneWithNoMain() throws Exception {
+        this.testJarFile.addClass("a/b/C.class", ClassWithoutMainMethod.class);
+        File file = this.testJarFile.getFile();
+        Repackager repackager = new Repackager(file);
+        repackager.setLayout(new Layouts.None());
+        repackager.repackage(file, NO_LIBRARIES);
+        Manifest actualManifest = getManifest(file);
+        assertThat(actualManifest.getMainAttributes().getValue("Main-Class"), equalTo(null));
+        assertThat(hasLauncherClasses(file), equalTo(false));
+    }
 
 	@Test
 	public void sameSourceAndDestinationWithBackup() throws Exception {
