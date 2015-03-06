@@ -114,6 +114,7 @@ public class VaultTest {
     public void encrypt() {
         Vault vault = Vault.instance();
         String s = vault.resolve("Encrypted value: ${encrypt:value}.", true);
+        System.out.println(s);
         Assert.assertTrue(s.matches("Encrypted value: \\$\\{encrypted:[^}]+\\}."));
         Assert.assertTrue(vault.resolve(s).matches("Encrypted value: value."));
     }
@@ -126,17 +127,10 @@ public class VaultTest {
     }
 
     @Test
-    public void setEncryptedPropertyMultiline() {
-        Vault vault = Vault.instance();
-        String s = "line1\nline2\nline3";
-        vault.setEncryptedProperty("key", s);
-        Assert.assertEquals(s, vault.getProperty("key"));
-    }
-
-    @Test
     public void decrypt() {
         Vault vault = Vault.instance();
         String s = vault.resolve("Encrypted value: ${encrypted:CfTPBtxs4vZnYF2pW3ouwvB4CzZJ3Av2Lc2a6wp1+sPmSJxcK/HXsjx3ntNXn72VFpsM+f86iwYj+SxJKY/FBK9MZETAioPW4F8CDGoHGzFXtk/JCaCdtvjWJTfYjJRjTiTnM83r7tliCBfKxlgEKjZkPq/hOT135dt6ZKK5avGLQ0iNkb5hF25AlyANr4HvSUPFDEu5QfZeNO206jowg4mALde5s9W0kRZiZKAvptvQtF/H2HuNM3S2E6TS0N3T4NR7zRwlzOxw6CGu0OI5qvQYcqHKjY6tKp0VQjyCHyioy+gyt/HHm1GceLlQgkqq6zIKk5dp+TfohcMxLQ1eJA==}.");
+        System.out.println(s);
         Assert.assertTrue(s.matches("Encrypted value: value."));
     }
 

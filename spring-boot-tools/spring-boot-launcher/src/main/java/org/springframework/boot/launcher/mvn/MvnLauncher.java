@@ -140,10 +140,10 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
                     }
 
                     Log.log(toLevel(ma.getStatus()),
-                            "- %-12s: %-60s %s",
+                            "- %-12s: %-80s %s",
                             ma.getStatus(), ma,
                             ma.getRepositoryId() != null
-                                    ? String.format("(%3dKB @%s)", ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : 0, ma.getRepositoryId())
+                                    ? String.format("(%4dKB @%s)", ma.getFile() != null && ma.getFile().exists() ? ma.getFile().length() / 1024 : 0, ma.getRepositoryId())
                                     : ""
                     );
                     // update some stats
@@ -196,7 +196,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 	@Override
 	protected void launch(String[] args, String mainClass, ClassLoader classLoader) throws Exception {
 		if (!MvnLauncherCfg.execute.asBoolean()) {
-			Log.info("Application updated. Execution skipped (%s=false)", MvnLauncherCfg.execute.getPropertyName());
+			Log.warn("Application updated. Execution skipped (%s=false)", MvnLauncherCfg.execute.getPropertyName());
 			return;
 		}
 		if (MvnLauncherCfg.debug.asBoolean()) {
@@ -214,6 +214,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 
     private Log.Level toLevel(MvnArtifact.Status status) {
         switch (status) {
+            case Invalid:
             case NotFound:
                 return Log.Level.WRN;
             default:

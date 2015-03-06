@@ -95,38 +95,26 @@ public class Layouts {
 	}
 
 	/**
-	 * References to all dependencies are stored in archive's manifest for later use
-	 * by {@code MvnLauncher}
-	 * @see org.springframework.boot.loader.MvnLauncher
-	 */
-	static public class Maven extends Jar {
-		@Override
-		public String getLauncherClassName() {
-			return null;
-		}
-
-		@Override
-		public String getLibraryDestination(String libraryName, LibraryScope scope) {
-			return null;
-		}
-
-		@Override
-		public boolean isExecutable() {
-			return false;
-		}
-	}
-
-	/**
 	 * No layout.
 	 */
-	public static class None extends Jar {
+	public static class None implements Layout {
 
 		@Override
 		public String getLauncherClassName() {
 			return null;
 		}
 
-		@Override
+        @Override
+        public String getLibraryDestination(String libraryName, LibraryScope scope) {
+            return null;
+        }
+
+        @Override
+        public String getClassesLocation() {
+            return "";
+        }
+
+        @Override
 		public boolean isExecutable() {
 			return false;
 		}

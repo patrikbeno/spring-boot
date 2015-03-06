@@ -82,6 +82,10 @@ public class Vault {
 
     static public Vault instance() { return vault(); }
 
+    static public void close() {
+        INSTANCE = null;
+    }
+
 	static public Vault vault() {
         VaultPermission.READ_PERMISSION.check();
 

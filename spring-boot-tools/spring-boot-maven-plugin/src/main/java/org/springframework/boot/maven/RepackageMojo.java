@@ -250,8 +250,6 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 		 */
 		MODULE(new Layouts.Module()),
 
-		MAVEN(new Layouts.Maven()),
-
 		/**
 		 * No Layout
 		 */

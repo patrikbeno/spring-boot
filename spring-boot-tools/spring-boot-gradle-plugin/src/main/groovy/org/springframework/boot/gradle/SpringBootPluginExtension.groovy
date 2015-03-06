@@ -49,8 +49,6 @@ public class SpringBootPluginExtension {
 
 		DIR(new Layouts.Expanded()),
 
-		MAVEN(new Layouts.Maven()),
-
 		MODULE(new Layouts.Module()),
 
 		NONE(new Layouts.None());

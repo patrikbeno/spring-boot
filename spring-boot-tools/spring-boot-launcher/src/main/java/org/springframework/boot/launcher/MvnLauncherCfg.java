@@ -20,6 +20,7 @@ import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.util.StatusLine;
 import org.springframework.boot.loader.Launcher;
 import org.springframework.boot.loader.util.SystemPropertyUtils;
+import org.springframework.boot.loader.util.UrlSupport;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -201,6 +202,10 @@ public enum MvnLauncherCfg {
     downloaders("3"),
 
     ;
+
+    static {
+        UrlSupport.init();
+    }
 
     static public Set<String> names() {
         Set<String> names = new HashSet<String>();
