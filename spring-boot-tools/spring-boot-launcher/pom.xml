@@ -47,6 +47,7 @@
 						<phase>package</phase>
 						<configuration>
 							<layout>JAR</layout>
+							<launcherClass>org.springframework.boot.launcher.Main</launcherClass>
 							<mainClass>org.springframework.boot.launcher.Main</mainClass>
                             <excludeGroupIds>
                                 org.springframework,org.springframework.boot
