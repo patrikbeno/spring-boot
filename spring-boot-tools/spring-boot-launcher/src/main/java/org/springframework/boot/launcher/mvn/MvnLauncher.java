@@ -217,9 +217,9 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
             case Invalid:
             case NotFound:
                 return Log.Level.WRN;
-            case Updated:
             case Downloaded:
-				return Log.Level.INF;
+            case Updated:
+				return MvnLauncherCfg.isDebugEnabled() ? Log.Level.DBG : Log.Level.INF;
 			default:
                 return Log.Level.DBG;
         }
