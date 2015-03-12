@@ -274,6 +274,10 @@ public class MvnRepositoryConnector {
             return artifact.getFile();
         }
 
+		if (!context.isDownloadAllowed(artifact)) {
+			return null;
+		}
+
         URLConnection con = null;
         try {
             URL url = artifact.con.getURL();
@@ -410,20 +414,29 @@ public class MvnRepositoryConnector {
             long lastModified = isAvailable(metadata) ? metadata.getLastModified() : mfile.lastModified();
             if (update) artifact.requests++;
 
+			// latest snapshot version from metadata
+			String snapshotVersion;
+
             // is our local copy up to date?
             boolean recent = mfile.exists() && mfile.lastModified() >= lastModified;
 
-            if (!recent) {
+			boolean downloadAllowed = context.isDownloadAllowed(artifact);
+
+			if (!recent) {
                 File tmp = new File(mfile.getParentFile(), UUID.randomUUID().toString() + ".tmp");
                 download(artifact, metadata, tmp);
-                commit(tmp, mfile, lastModified);
-            }
-
-            // load latest snapshot version from metadata
-            String version = getSnapshotVersionFromMetadata(mfile);
+				snapshotVersion = getSnapshotVersionFromMetadata(tmp);
+				if (downloadAllowed) {
+					commit(tmp, mfile, lastModified);
+				} else {
+					tmp.delete();
+				}
+            } else {
+				snapshotVersion = getSnapshotVersionFromMetadata(mfile);
+			}
 
             // and set the result
-            artifact.setResolvedSnapshotVersion(artifact.getVersion().replaceFirst("SNAPSHOT$", version));
+            artifact.setResolvedSnapshotVersion(artifact.getVersion().replaceFirst("SNAPSHOT$", snapshotVersion));
 
         } catch (FileNotFoundException e) {
             // no metadata, artifact probably does not exist

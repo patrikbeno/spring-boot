@@ -114,10 +114,12 @@ public class Resolver {
         try {
             File f = download().get().getArtifact().getFile();
             jar = new JarFileArchive(f);
-            this.mainClass = jar.getMainClass();
-            this.dependencies = getArtifacts(jar);
+
+			this.mainClass = jar.getMainClass();
+			this.dependencies = getArtifacts(jar);
 
             // propagate all to context
+			context.main = getArtifact();
             context.artifacts.add(artifact);
             for (MvnArtifact ma : dependencies) {
                 ma.setStatus(MvnArtifact.Status.Resolving);

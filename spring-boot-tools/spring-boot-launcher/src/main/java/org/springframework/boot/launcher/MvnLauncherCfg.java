@@ -197,6 +197,8 @@ public enum MvnLauncherCfg {
 	 */
 	update(false),
 
+	skipDownload(false),
+
     resolvers("7"),
 
     downloaders("3"),

@@ -175,7 +175,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
             }
 
             // if there are errors and fail-on-error property has not been reset, fail
-            if (MvnLauncherCfg.failOnError.asBoolean() && errors > 0) {
+            if (MvnLauncherCfg.execute.asBoolean() && errors > 0 && MvnLauncherCfg.failOnError.asBoolean()) {
                 throw new MvnLauncherException(String.format(
                         "%d errors resolving dependencies. Use --%s to view details or --%s to ignore these errors and continue",
                         errors, MvnLauncherCfg.debug.name(), MvnLauncherCfg.failOnError.name()));
@@ -216,6 +216,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
         switch (status) {
             case Invalid:
             case NotFound:
+			case Downloadable:
                 return Log.Level.WRN;
             case Downloaded:
             case Updated:

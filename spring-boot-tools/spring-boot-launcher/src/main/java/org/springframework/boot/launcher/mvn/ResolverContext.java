@@ -125,6 +125,10 @@ public class ResolverContext implements AutoCloseable {
         };
     }
 
+	boolean isDownloadAllowed(MvnArtifact artifact) {
+		return !MvnLauncherCfg.skipDownload.asBoolean() || artifact.equals(this.main);
+	}
+
     /**
      * Close & release executor
      */
