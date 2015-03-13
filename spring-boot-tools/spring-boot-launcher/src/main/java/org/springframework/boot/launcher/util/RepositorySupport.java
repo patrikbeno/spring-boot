@@ -1,5 +1,6 @@
 package org.springframework.boot.launcher.util;
 
+import org.springframework.boot.launcher.MvnLauncherException;
 import org.springframework.boot.launcher.mvn.MvnArtifact;
 import org.springframework.boot.launcher.mvn.Resolver;
 import org.springframework.boot.launcher.mvn.ResolverContext;
@@ -24,9 +25,9 @@ public class RepositorySupport {
                 ctx.stopProgressMonitor();
             }
         } catch (ExecutionException e) {
-            throw new UnsupportedOperationException(e);
+            throw new MvnLauncherException(e);
         } catch (InterruptedException e) {
-            throw new UnsupportedOperationException(e);
+            throw new MvnLauncherException(e);
         } finally {
             IOHelper.close(ctx);
         }
