@@ -27,6 +27,8 @@ import java.io.File;
  */
 public class Library {
 
+    private final MvnUri mvnuri;
+
 	private final String name;
 
 	private final File file;
@@ -41,7 +43,7 @@ public class Library {
 	 * @param scope the scope of the library
 	 */
 	public Library(File file, LibraryScope scope) {
-		this(file, scope, false);
+		this(null, null, file, scope, false);
 	}
 
 	/**
@@ -51,7 +53,7 @@ public class Library {
 	 * @param unpackRequired if the library needs to be unpacked before it can be used
 	 */
 	public Library(File file, LibraryScope scope, boolean unpackRequired) {
-		this(null, file, scope, unpackRequired);
+		this(null, null, file, scope, unpackRequired);
 	}
 
 	/**
@@ -63,13 +65,32 @@ public class Library {
 	 * @param unpackRequired if the library needs to be unpacked before it can be used
 	 */
 	public Library(String name, File file, LibraryScope scope, boolean unpackRequired) {
-		this.name = (name == null ? file.getName() : name);
-		this.file = file;
-		this.scope = scope;
-		this.unpackRequired = unpackRequired;
+        this(null, name, file, scope, unpackRequired);
 	}
 
-	/**
+    /**
+     *
+     * @param mvnuri
+     * @param file
+     * @param scope
+     * @param unpackRequired
+     */
+    public Library(MvnUri mvnuri, String name, File file, LibraryScope scope, boolean unpackRequired) {
+        this.mvnuri = mvnuri;
+        this.name = (name == null ? file.getName() : name);
+        this.file = file;
+        this.scope = scope;
+        this.unpackRequired = unpackRequired;
+    }
+
+    /**
+     * @return identifier of the artifact in maven repository
+     */
+    public MvnUri getArtifactURI() {
+        return mvnuri;
+    }
+
+    /**
 	 * @return the name of file as it should be written
 	 */
 	public String getName() {
@@ -96,6 +117,6 @@ public class Library {
 	 */
 	public boolean isUnpackRequired() {
 		return this.unpackRequired;
-	}
+    }
 
 }
