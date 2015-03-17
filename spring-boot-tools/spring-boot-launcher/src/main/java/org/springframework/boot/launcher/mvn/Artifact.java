@@ -32,12 +32,12 @@ import java.util.regex.Pattern;
 /**
  * @author Patrik Beno
  */
-public class MvnArtifact {
+public class Artifact {
 
 	// compares artifacts by group:artifact:version:packaging:classifier
-	static public Comparator<MvnArtifact> COMPARATOR = new Comparator<MvnArtifact>() {
+	static public Comparator<Artifact> COMPARATOR = new Comparator<Artifact>() {
 		@Override
-		public int compare(MvnArtifact o1, MvnArtifact o2) {
+		public int compare(Artifact o1, Artifact o2) {
 			return o1.asString().compareTo(o2.asString());
 		}
 	};
@@ -74,7 +74,7 @@ public class MvnArtifact {
     public int requests;
 
 
-	protected MvnArtifact(String groupId, String artifactId, String version, String packaging, String classifier) {
+	protected Artifact(String groupId, String artifactId, String version, String packaging, String classifier) {
 		this.groupId = groupId;
 		this.artifactId = artifactId;
 		this.version = groupId;
@@ -83,7 +83,7 @@ public class MvnArtifact {
 		fixupExplicitSnapshotVersion();
 	}
 
-	public MvnArtifact(String mvnuri) {
+	public Artifact(String mvnuri) {
 		StringTokenizer st = new StringTokenizer(mvnuri, ":");
 		this.groupId = st.nextToken();
 		this.artifactId = st.nextToken();
@@ -274,7 +274,7 @@ public class MvnArtifact {
 		if (o == null || getClass() != o.getClass())
 			return false;
 
-		MvnArtifact that = (MvnArtifact) o;
+		Artifact that = (Artifact) o;
 
 		if (!artifactId.equals(that.artifactId))
 			return false;

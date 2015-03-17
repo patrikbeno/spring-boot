@@ -18,17 +18,17 @@ package org.springframework.boot.launcher;
 /**
  * @author Patrik Beno
  */
-public class MvnLauncherException extends RuntimeException {
+public class LauncherException extends RuntimeException {
 
-	public MvnLauncherException(String message) {
+	public LauncherException(String message) {
 		super(message);
 	}
 
-	public MvnLauncherException(Throwable cause) {
+	public LauncherException(Throwable cause) {
 		super(cause);
 	}
 
-	public MvnLauncherException(Throwable cause, String message, Object ... args) {
+	public LauncherException(Throwable cause, String message, Object... args) {
 		super(String.format(message, args), cause);
 	}
 }

@@ -1,6 +1,6 @@
 package org.springframework.boot.launcher.util;
 
-import org.springframework.boot.launcher.MvnLauncherCfg;
+import org.springframework.boot.launcher.LauncherCfg;
 
 import java.io.PrintStream;
 
@@ -24,7 +24,7 @@ public class Log {
     static private final long STARTED = System.currentTimeMillis();
 
     static public boolean isDebug() {
-        return MvnLauncherCfg.isDebugEnabled();
+        return LauncherCfg.isDebugEnabled();
     }
 
 	static public synchronized void log(Level level, String message, Object... args) {
@@ -43,12 +43,12 @@ public class Log {
 	}
 
 	static public synchronized void info(String message, Object... args) {
-        if (MvnLauncherCfg.quiet.asBoolean()) { return; }
+        if (LauncherCfg.quiet.asBoolean()) { return; }
         log(out(), INF, message, args);
 	}
 
 	static public synchronized void warn(String message, Object... args) {
-        if (MvnLauncherCfg.quiet.asBoolean()) { return; }
+        if (LauncherCfg.quiet.asBoolean()) { return; }
         log(out(), WRN, message, args);
 	}
 
@@ -59,7 +59,7 @@ public class Log {
         for (Throwable t = thrown ; t != null; t = t.getCause()) {
             log(err(), ERR, "- Caused by: %s", t.getMessage());
         }
-        if (thrown != null && MvnLauncherCfg.debug.asBoolean()) {
+        if (thrown != null && LauncherCfg.debug.asBoolean()) {
             thrown.printStackTrace(err());
         }
     }

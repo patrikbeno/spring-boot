@@ -1,6 +1,6 @@
 package org.springframework.boot.launcher.util;
 
-import org.springframework.boot.launcher.MvnLauncherCfg;
+import org.springframework.boot.launcher.LauncherCfg;
 
 import java.util.ArrayList;
 import java.util.Formatter;
@@ -56,7 +56,7 @@ public class StatusLine {
     }
 
     static void refresh() {
-        if (MvnLauncherCfg.quiet.asBoolean()) { return; }
+        if (LauncherCfg.quiet.asBoolean()) { return; }
         synchronized (out()) {
             resetLine();
             print(new Formatter(out()));
@@ -65,7 +65,7 @@ public class StatusLine {
     }
 
     static public void resetLine() {
-        if (MvnLauncherCfg.quiet.asBoolean()) { return; }
+        if (LauncherCfg.quiet.asBoolean()) { return; }
 
         StringBuilder sb = new StringBuilder();
         Formatter f = new Formatter(sb);

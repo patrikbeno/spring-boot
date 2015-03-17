@@ -1,9 +1,10 @@
-package org.springframework.boot.launcher.util;
+package org.springframework.boot.launcher;
 
-import org.springframework.boot.launcher.MvnLauncherException;
-import org.springframework.boot.launcher.mvn.MvnArtifact;
+import org.springframework.boot.launcher.LauncherException;
+import org.springframework.boot.launcher.mvn.Artifact;
 import org.springframework.boot.launcher.mvn.Resolver;
 import org.springframework.boot.launcher.mvn.ResolverContext;
+import org.springframework.boot.launcher.util.IOHelper;
 
 import java.util.concurrent.ExecutionException;
 
@@ -12,8 +13,8 @@ import java.util.concurrent.ExecutionException;
  */
 public class RepositorySupport {
 
-    static public MvnArtifact resolve(String mvnuri) {
-        MvnArtifact ma = new MvnArtifact(mvnuri);
+    static public Artifact resolve(String mvnuri) {
+        Artifact ma = new Artifact(mvnuri);
         ResolverContext ctx = null;
         try {
             ctx = new ResolverContext(ma);
@@ -25,9 +26,9 @@ public class RepositorySupport {
                 ctx.stopProgressMonitor();
             }
         } catch (ExecutionException e) {
-            throw new MvnLauncherException(e);
+            throw new LauncherException(e);
         } catch (InterruptedException e) {
-            throw new MvnLauncherException(e);
+            throw new LauncherException(e);
         } finally {
             IOHelper.close(ctx);
         }

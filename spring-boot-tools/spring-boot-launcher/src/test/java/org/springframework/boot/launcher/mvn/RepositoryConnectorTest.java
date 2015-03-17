@@ -9,14 +9,14 @@ import java.io.File;
 /**
  * @author <a href="mailto:patrikbeno@gmail.com">Patrik Beno</a>
  */
-public class MvnRepositoryConnectorTest extends AbstractTest {
+public class RepositoryConnectorTest extends AbstractTest {
 
 	@Test
 	public void test() {
-		MvnArtifact a = new MvnArtifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
+		Artifact a = new Artifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
         ResolverContext context = new ResolverContext(a);
         try {
-            MvnRepositoryConnector c = new MvnRepositoryConnector(MvnRepository.forRepositoryId("default"), context, null);
+            RepositoryConnector c = new RepositoryConnector(Repository.forRepositoryId("default"), context, null);
             c.resolveSnapshotVersion(a);
             File f = c.resolve(a);
             Assert.assertNotNull(f);

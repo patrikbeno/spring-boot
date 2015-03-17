@@ -1,14 +1,9 @@
 package org.springframework.boot.launcher;
 
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.springframework.boot.launcher.vault.Vault;
-import org.springframework.boot.loader.util.SystemPropertyUtils;
 
-import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,7 +25,7 @@ public abstract class AbstractTest {
         Files.copy(AbstractTest.class.getResourceAsStream("/test.crt"), crt, StandardCopyOption.REPLACE_EXISTING);
         Files.copy(AbstractTest.class.getResourceAsStream("/test.key"), key, StandardCopyOption.REPLACE_EXISTING);
         System.setProperty("MvnLauncher.defaults", "classpath:MvnLauncherCfg.properties");
-        MvnLauncherCfg.configure();
+        LauncherCfg.configure();
 
         System.setProperty("springboot.vault.user.certFile", crt.toString());
         System.setProperty("springboot.vault.user.keyFile", key.toString());

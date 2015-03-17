@@ -15,7 +15,7 @@
  */
 package org.springframework.boot.launcher;
 
-import org.springframework.boot.launcher.mvn.MvnArtifact;
+import org.springframework.boot.launcher.mvn.Artifact;
 import org.springframework.boot.launcher.url.UrlSupport;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.util.StatusLine;
@@ -51,10 +51,10 @@ import static org.springframework.boot.loader.util.SystemPropertyUtils.resolvePl
  * a property file specified in {@code -DMvnLauncher.defaults} property (which itself
  * defaults to {@code $ user.home}/.springboot/defaults.properties}).
  *
- * @see org.springframework.boot.launcher.mvn.MvnLauncher
+ * @see org.springframework.boot.launcher.mvn.Launcher
  * @author Patrik Beno
  */
-public enum MvnLauncherCfg {
+public enum LauncherCfg {
 
 	// naming convention broken intentionally: enum name() is also property name used in
 	// -DMvnLauncher.{name}={value} or --MvnLauncher.{name}={value}
@@ -211,7 +211,7 @@ public enum MvnLauncherCfg {
 
     static public Set<String> names() {
         Set<String> names = new HashSet<String>();
-        for (MvnLauncherCfg v : values()) {
+        for (LauncherCfg v : values()) {
             names.add(v.name());
         }
         return names;
@@ -219,15 +219,15 @@ public enum MvnLauncherCfg {
 
 	private String dflt;
 
-	MvnLauncherCfg() {
+	LauncherCfg() {
 		dflt(null);
 	}
 
-	MvnLauncherCfg(String dflt) {
+	LauncherCfg(String dflt) {
 		dflt(dflt);
 	}
 
-	MvnLauncherCfg(boolean dflt) {
+	LauncherCfg(boolean dflt) {
 		dflt(Boolean.toString(dflt));
 	}
 
@@ -302,7 +302,7 @@ public enum MvnLauncherCfg {
         try {
             return url(asString(), directory).toURI();
         } catch (URISyntaxException e) {
-            throw new MvnLauncherException(e);
+            throw new LauncherException(e);
         }
     }
 
@@ -310,8 +310,8 @@ public enum MvnLauncherCfg {
 		return new File(asString());
 	}
 
-	public MvnArtifact asMvnArtifact() {
-		return new MvnArtifact(asString());
+	public Artifact asMvnArtifact() {
+		return new Artifact(asString());
 	}
 
 	// /
@@ -338,7 +338,7 @@ public enum MvnLauncherCfg {
         // export defaults
         export();
 
-        Properties props = properties(MvnLauncherCfg.defaults.get().split(","));
+        Properties props = properties(LauncherCfg.defaults.get().split(","));
 
 		// propagate all yet undefined foreign properties from loaded resources into
 		// system properties
@@ -362,7 +362,7 @@ public enum MvnLauncherCfg {
 		}
 
 		// propagate defaults, if available
-		for (MvnLauncherCfg v : values()) {
+		for (LauncherCfg v : values()) {
             // override built-in default with value from resources
             v.dflt = props.getProperty(v.getPropertyName(), v.dflt);
 
@@ -376,7 +376,7 @@ public enum MvnLauncherCfg {
 
         if (isDebugEnabled()) {
             header = "MvnLauncher configuration:";
-            for (MvnLauncherCfg v : values()) {
+            for (LauncherCfg v : values()) {
                 if (header != null) {
                     Log.debug(header);
                     header = null;
@@ -387,7 +387,7 @@ public enum MvnLauncherCfg {
 	}
     
     static public void export() {
-		for (MvnLauncherCfg v : MvnLauncherCfg.values()) {
+		for (LauncherCfg v : LauncherCfg.values()) {
             if (v.get() == null) { continue; }
             System.setProperty(v.getPropertyName(), v.asString());
         }
@@ -448,11 +448,11 @@ public enum MvnLauncherCfg {
 			return new URL(resolved);
 		}
 		catch (MalformedURLException e) {
-			throw new MvnLauncherException(e, "Invalid URL: " + surl);
+			throw new LauncherException(e, "Invalid URL: " + surl);
 		}
 	}
 
-    private static void fix(MvnLauncherCfg cfg, int min, int max) {
+    private static void fix(LauncherCfg cfg, int min, int max) {
         int actual = cfg.asInt();
         int adjusted = min(max(actual, min), max);
         if (actual != adjusted) {

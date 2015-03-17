@@ -15,7 +15,7 @@
  */
 package org.springframework.boot.launcher.mvn;
 
-import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.LauncherException;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.vault.Vault;
 import org.springframework.boot.launcher.vault.VaultPermission;
@@ -36,13 +36,13 @@ import java.net.URL;
  *
  * @author Patrik Beno
  */
-public class MvnRepository {
+public class Repository {
 
     static public final String P_URL           = "springboot.mvnlauncher.repository.%s.url";
     static public final String P_USERNAME      = "springboot.mvnlauncher.repository.%s.username";
     static public final String P_PASSWORD      = "springboot.mvnlauncher.repository.%s.password";
 
-    static public MvnRepository forRepositoryId(String repositoryId) {
+    static public Repository forRepositoryId(String repositoryId) {
 
         final Vault vault = Vault.instance();
 
@@ -61,7 +61,7 @@ public class MvnRepository {
             }
         };
 
-        return new MvnRepository(repositoryId, URI.create(url), username, password);
+        return new Repository(repositoryId, URI.create(url), username, password);
     }
 
     private String id;
@@ -69,7 +69,7 @@ public class MvnRepository {
 	private String username;
 	private Decryptable password;
 
-	public MvnRepository(String id, URI uri, String username, Decryptable password) {
+	public Repository(String id, URI uri, String username, Decryptable password) {
         this.id = id;
         this.uri = uri;
         this.username = username;
@@ -101,7 +101,7 @@ public class MvnRepository {
         try {
             return uri.toURL();
         } catch (MalformedURLException e) {
-            throw new MvnLauncherException(e);
+            throw new LauncherException(e);
         }
     }
 
@@ -113,7 +113,7 @@ public class MvnRepository {
         }
         if (username != null && password == null) {
             Log.error(null, "Rejecting to save credentials with empty password. Repository: `%s`, username: `%s`", id, username);
-            throw new MvnLauncherException("Missing password");
+            throw new LauncherException("Missing password");
         }
 
         Vault vault = Vault.instance();

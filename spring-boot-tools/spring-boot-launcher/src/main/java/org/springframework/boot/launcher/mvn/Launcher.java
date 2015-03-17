@@ -15,8 +15,8 @@
  */
 package org.springframework.boot.launcher.mvn;
 
-import org.springframework.boot.launcher.MvnLauncherCfg;
-import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.LauncherCfg;
+import org.springframework.boot.launcher.LauncherException;
 import org.springframework.boot.launcher.url.UrlSupport;
 import org.springframework.boot.launcher.util.IOHelper;
 import org.springframework.boot.launcher.util.Log;
@@ -25,6 +25,7 @@ import org.springframework.boot.loader.ExecutableArchiveLauncher;
 import org.springframework.boot.loader.LaunchedURLClassLoader;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.JarFileArchive;
+import org.springframework.boot.loader.jar.JarFile;
 
 import java.net.URL;
 import java.util.ArrayList;
@@ -42,17 +43,17 @@ import java.util.SortedSet;
  *
  * @author Patrik Beno
  */
-public class MvnLauncher extends ExecutableArchiveLauncher {
+public class Launcher extends ExecutableArchiveLauncher {
 
     static {
         UrlSupport.init();
     }
 
-	private MvnArtifact artifact;
+	private Artifact artifact;
 
 	private String mainClass;
 
-	public MvnLauncher(MvnArtifact artifact) {
+	public Launcher(Artifact artifact) {
 		this.artifact = artifact;
 	}
 
@@ -74,6 +75,21 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 		return false; // unsupported / irrelevant
 	}
 
+	@Override
+	protected void launch(String[] args) {
+		try {
+			JarFile.registerUrlProtocolHandler();
+			ClassLoader classLoader = createClassLoader(getClassPathArchives());
+			launch(args, getMainClass(), classLoader);
+		}
+		catch (LauncherException e) {
+			throw e;
+		}
+		catch (Exception e) {
+			throw new LauncherException(e);
+		}
+	}
+
 	/// API for embedded use
 
 	/**
@@ -84,7 +100,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 	 * @param parent
 	 * @return
 	 */
-    public ClassLoader resolve(MvnArtifact artifact, List<MvnArtifact> ext, ClassLoader parent) {
+    public ClassLoader resolve(Artifact artifact, List<Artifact> ext, ClassLoader parent) {
 		try {
 			List<Archive> archives = getClassPathArchives(artifact);
 			List<URL> urls = new ArrayList<URL>(archives.size());
@@ -96,18 +112,18 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 			return cl;
 		}
 		catch (Exception e) {
-			throw new MvnLauncherException(e,
+			throw new LauncherException(e,
 					"Cannot resolve artifact or its dependencies: " + artifact.asString());
 		}
 	}
 
-    public ClassLoader resolve(MvnArtifact artifact, ClassLoader parent) {
+    public ClassLoader resolve(Artifact artifact, ClassLoader parent) {
         return resolve(artifact, null, parent);
     }
 
     ///
 
-	protected List<Archive> getClassPathArchives(MvnArtifact mvnartifact) throws Exception {
+	protected List<Archive> getClassPathArchives(Artifact mvnartifact) throws Exception {
 
         List<Archive> archives = new LinkedList<Archive>();
 
@@ -133,7 +149,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
                 for (Resolver r : resolvers) {
 
                     // this may block until resolved artifact is available
-                    MvnArtifact ma = r.getResolvedArtifact();
+                    Artifact ma = r.getResolvedArtifact();
 
                     if (ma.getFile() != null && ma.getFile().exists()) {
                         archives.add(new JarFileArchive(ma.getFile()));
@@ -165,7 +181,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
             }
 
             // if enabled, print some final report
-            if (!MvnLauncherCfg.quiet.asBoolean()) {
+            if (!LauncherCfg.quiet.asBoolean()) {
                 long elapsed = System.currentTimeMillis() - context.created;
                 Log.info(String.format(
                         "Summary: %d archives, %d KB total (resolved in %d msec, downloaded %d KB in %d requests, %d KBps). Warnings/Errors: %d/%d.",
@@ -175,10 +191,10 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
             }
 
             // if there are errors and fail-on-error property has not been reset, fail
-            if (MvnLauncherCfg.execute.asBoolean() && errors > 0 && MvnLauncherCfg.failOnError.asBoolean()) {
-                throw new MvnLauncherException(String.format(
+            if (LauncherCfg.execute.asBoolean() && errors > 0 && LauncherCfg.failOnError.asBoolean()) {
+                throw new LauncherException(String.format(
                         "%d errors resolving dependencies. Use --%s to view details or --%s to ignore these errors and continue",
-                        errors, MvnLauncherCfg.debug.name(), MvnLauncherCfg.failOnError.name()));
+                        errors, LauncherCfg.debug.name(), LauncherCfg.failOnError.name()));
             }
 
             return archives;
@@ -195,24 +211,24 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
 
 	@Override
 	protected void launch(String[] args, String mainClass, ClassLoader classLoader) throws Exception {
-		if (!MvnLauncherCfg.execute.asBoolean()) {
-			Log.warn("Application updated. Execution skipped (%s=false)", MvnLauncherCfg.execute.getPropertyName());
+		if (!LauncherCfg.execute.asBoolean()) {
+			Log.warn("Application updated. Execution skipped (%s=false)", LauncherCfg.execute.getPropertyName());
 			return;
 		}
-		if (MvnLauncherCfg.debug.asBoolean()) {
+		if (LauncherCfg.debug.asBoolean()) {
 			Log.debug("## Application Arguments:");
 			for (String s : args) {
 				Log.debug(s);
 			}
 			Log.debug("##");
 		}
-        MvnLauncherCfg.export();
+        LauncherCfg.export();
 		super.launch(args, mainClass, classLoader);
 	}
 
     ///
 
-    private Log.Level toLevel(MvnArtifact.Status status) {
+    private Log.Level toLevel(Artifact.Status status) {
         switch (status) {
             case Invalid:
             case NotFound:
@@ -220,7 +236,7 @@ public class MvnLauncher extends ExecutableArchiveLauncher {
                 return Log.Level.WRN;
             case Downloaded:
             case Updated:
-				return MvnLauncherCfg.isDebugEnabled() ? Log.Level.DBG : Log.Level.INF;
+				return LauncherCfg.isDebugEnabled() ? Log.Level.DBG : Log.Level.INF;
 			default:
                 return Log.Level.DBG;
         }

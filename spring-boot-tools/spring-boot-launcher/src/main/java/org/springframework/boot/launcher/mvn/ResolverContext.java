@@ -1,6 +1,6 @@
 package org.springframework.boot.launcher.mvn;
 
-import org.springframework.boot.launcher.MvnLauncherCfg;
+import org.springframework.boot.launcher.LauncherCfg;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.util.StatusLine;
 
@@ -23,24 +23,24 @@ public class ResolverContext implements AutoCloseable {
 
     long created = System.currentTimeMillis();
 
-    File cache = MvnLauncherCfg.cache.asFile();
+    File cache = LauncherCfg.cache.asFile();
 
-    MvnArtifact main;
+    Artifact main;
 
-    List<MvnArtifact> artifacts = new LinkedList<MvnArtifact>();
+    List<Artifact> artifacts = new LinkedList<Artifact>();
 
-    MvnRepositoryConnector connector;
+    RepositoryConnector connector;
 
     ThreadGroup group = new ThreadGroup(getClass().getSimpleName());
 
-    ExecutorService resolvers = Executors.newFixedThreadPool(MvnLauncherCfg.resolvers.asInt(), new ThreadFactory() {
+    ExecutorService resolvers = Executors.newFixedThreadPool(LauncherCfg.resolvers.asInt(), new ThreadFactory() {
         int counter;
         @Override
         public Thread newThread(Runnable r) {
             return new Thread(group, r, "MvnLauncher:Resolver#" + (++counter));
         }
     });
-    ExecutorService downloaders = Executors.newFixedThreadPool(MvnLauncherCfg.downloaders.asInt(), new ThreadFactory() {
+    ExecutorService downloaders = Executors.newFixedThreadPool(LauncherCfg.downloaders.asInt(), new ThreadFactory() {
         int counter;
         @Override
         public Thread newThread(Runnable r) {
@@ -58,7 +58,7 @@ public class ResolverContext implements AutoCloseable {
     DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
     XPathFactory xpf = XPathFactory.newInstance();
 
-    public ResolverContext(MvnArtifact main) {
+    public ResolverContext(Artifact main) {
         this.main = main;
         this.connector = buildMvnRepositoryConnector();
 
@@ -74,16 +74,16 @@ public class ResolverContext implements AutoCloseable {
         StatusLine.pop();
     }
 
-    MvnRepositoryConnector buildMvnRepositoryConnector() {
-        List<String> ids = MvnLauncherCfg.repositories.asList();
+    RepositoryConnector buildMvnRepositoryConnector() {
+        List<String> ids = LauncherCfg.repositories.asList();
         Collections.reverse(ids);
-        MvnRepositoryConnector connector = null;
+        RepositoryConnector connector = null;
         for (String id : ids) {
-            MvnRepository repo = MvnRepository.forRepositoryId(id);
-            connector = new MvnRepositoryConnector(repo, this, connector);
+            Repository repo = Repository.forRepositoryId(id);
+            connector = new RepositoryConnector(repo, this, connector);
         }
         Log.debug("Using repositories:");
-        for (MvnRepositoryConnector c = connector; c != null; c = c.parent) {
+        for (RepositoryConnector c = connector; c != null; c = c.parent) {
             String credentials = c.repository.hasPassword() ? c.repository.getUserName() : "<anonymous>";
             Log.debug("- %12s : %s (%s)", c.repository.getId(), c.repository.getURL(), credentials);
         }
@@ -98,7 +98,7 @@ public class ResolverContext implements AutoCloseable {
                     int completed = 0;
                     long downloaded = 0;
                     long size = 0;
-                    for (MvnArtifact ma : artifacts) {
+                    for (Artifact ma : artifacts) {
                         switch (ma.getStatus()) {
                             case Resolving:
                                 break;
@@ -117,7 +117,7 @@ public class ResolverContext implements AutoCloseable {
                     StatusLine.update(
                             "Resolving dependencies %d/%d (%d KB / %d%%) %s",
                             completed, artifacts.size(), downloaded / 1024, size > 0 ? downloaded * 100 / size : 100,
-                            MvnLauncherCfg.debug.asBoolean() ? "" : "\033[0m(Use --debug to see more)");
+                            LauncherCfg.debug.asBoolean() ? "" : "\033[0m(Use --debug to see more)");
                 } catch (Throwable e) {
                     e.printStackTrace();
                 }
@@ -125,8 +125,8 @@ public class ResolverContext implements AutoCloseable {
         };
     }
 
-	boolean isDownloadAllowed(MvnArtifact artifact) {
-		return !MvnLauncherCfg.skipDownload.asBoolean() || artifact.equals(this.main);
+	boolean isDownloadAllowed(Artifact artifact) {
+		return !LauncherCfg.skipDownload.asBoolean() || artifact.equals(this.main);
 	}
 
     /**

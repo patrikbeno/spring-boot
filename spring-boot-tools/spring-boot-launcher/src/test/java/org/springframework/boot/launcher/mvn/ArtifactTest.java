@@ -22,11 +22,11 @@ import static org.junit.Assert.assertEquals;
 /**
  * @author <a href="mailto:patrikbeno@gmail.com">Patrik Beno</a>
  */
-public class MvnArtifactTest {
+public class ArtifactTest {
 
 	@Test
 	public void parseRelease() throws Exception {
-		MvnArtifact ma = new MvnArtifact("my.group:my.artifact:1.0");
+		Artifact ma = new Artifact("my.group:my.artifact:1.0");
 		assertEquals("my.group", ma.getGroupId());
 		assertEquals("my.artifact", ma.getArtifactId());
 		assertEquals("1.0", ma.getVersion());
@@ -36,7 +36,7 @@ public class MvnArtifactTest {
 
 	@Test
 	public void parseClassifier() throws Exception {
-		MvnArtifact ma = new MvnArtifact("my.group:my.artifact:1.0:jar:sources");
+		Artifact ma = new Artifact("my.group:my.artifact:1.0:jar:sources");
 		assertEquals("1.0", ma.getVersion());
 		assertEquals("jar", ma.getPackaging());
 		assertEquals("sources", ma.getClassifier());
@@ -45,7 +45,7 @@ public class MvnArtifactTest {
 
 	@Test
 	public void parseSnapshot() throws Exception {
-		MvnArtifact ma = new MvnArtifact("mygroup:myartifact:1.0-SNAPSHOT");
+		Artifact ma = new Artifact("mygroup:myartifact:1.0-SNAPSHOT");
 		ma.setResolvedSnapshotVersion("20140131.123456");
 		assertEquals("mygroup", ma.getGroupId());
 		assertEquals("myartifact", ma.getArtifactId());

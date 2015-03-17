@@ -1,6 +1,7 @@
 package org.springframework.boot.launcher.mvn;
 
-import org.springframework.boot.launcher.MvnLauncherException;
+import org.springframework.boot.launcher.LauncherException;
+import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.JarFileArchive;
 
@@ -33,27 +34,27 @@ public class Resolver {
 
     ResolverContext context;
 
-    MvnArtifact artifact;
+    Artifact artifact;
 
     String mainClass;
 
-    List<MvnArtifact> dependencies;
+    List<Artifact> dependencies;
 
     Future<Resolver> fresolve;
     Future<Resolver> fdownload;
 
     List<Resolver> fdependencies;
 
-    public Resolver(ResolverContext context, MvnArtifact artifact) {
+    public Resolver(ResolverContext context, Artifact artifact) {
         this.context = context;
         this.artifact = artifact;
     }
 
-    public MvnArtifact getArtifact() {
+    public Artifact getArtifact() {
         return artifact;
     }
 
-    public MvnArtifact getResolvedArtifact() throws ExecutionException, InterruptedException {
+    public Artifact getResolvedArtifact() throws ExecutionException, InterruptedException {
         return download().get().getArtifact();
     }
 
@@ -84,7 +85,7 @@ public class Resolver {
         if (fdependencies != null) { return fdependencies; }
         resolveMainClassAndDependencies();
         List<Resolver> resolvers = new LinkedList<Resolver>();
-        for (MvnArtifact ma : dependencies) {
+        for (Artifact ma : dependencies) {
             Resolver r = new Resolver(context, ma);
             resolvers.add(r);
             r.resolve();
@@ -113,6 +114,13 @@ public class Resolver {
         JarFileArchive jar = null;
         try {
             File f = download().get().getArtifact().getFile();
+
+			if (f == null) {
+				throw new LauncherException(
+						getArtifact().getError(),
+						"Cannot resolve %s (status: %s)",  getArtifact(), getArtifact().getStatus());
+			}
+
             jar = new JarFileArchive(f);
 
 			this.mainClass = jar.getMainClass();
@@ -121,13 +129,15 @@ public class Resolver {
             // propagate all to context
 			context.main = getArtifact();
             context.artifacts.add(artifact);
-            for (MvnArtifact ma : dependencies) {
-                ma.setStatus(MvnArtifact.Status.Resolving);
+            for (Artifact ma : dependencies) {
+                ma.setStatus(Artifact.Status.Resolving);
                 context.artifacts.add(ma);
             }
 
+        } catch (LauncherException e) {
+			throw e;
         } catch (Exception e) {
-            throw new UnsupportedOperationException(e);
+            throw new LauncherException(e);
         } finally {
             close(jar);
         }
@@ -136,40 +146,40 @@ public class Resolver {
     /**
      * Load list of Maven dependencies from manifest of a specified archive
      */
-    private List<MvnArtifact> getArtifacts(Archive archive) {
+    private List<Artifact> getArtifacts(Archive archive) {
         try {
             Manifest mf = archive.getManifest();
             String mfdeps = mf.getMainAttributes().getValue(MF_DEPENDENCIES);
             if (mfdeps == null) {
-                throw new MvnLauncherException(String.format(
+                throw new LauncherException(String.format(
                         "%s undefined in MANIFEST. This is not SpringBoot MvnLauncher-enabled artifact: %s",
                         MF_DEPENDENCIES, archive));
             }
             String[] manifestDependencies = mfdeps.split(",");
-            List<MvnArtifact> artifacts = toArtifacts(manifestDependencies);
+            List<Artifact> artifacts = toArtifacts(manifestDependencies);
             return artifacts;
         }
         catch (IOException e) {
-            throw new MvnLauncherException(e, "Cannot resolve artifacts for archive " + archive);
+            throw new LauncherException(e, "Cannot resolve artifacts for archive " + archive);
         }
     }
 
     // parses Maven URIs and converts them into list of Maven artifacts
-    private List<MvnArtifact> toArtifacts(String[] strings) {
+    private List<Artifact> toArtifacts(String[] strings) {
         if (strings == null) {
             return Collections.emptyList();
         }
-        List<MvnArtifact> result = new ArrayList<MvnArtifact>();
+        List<Artifact> result = new ArrayList<Artifact>();
         for (String s : strings) {
             if (s == null || s.trim().isEmpty()) {
                 continue;
             }
-            result.add(new MvnArtifact(s));
+            result.add(new Artifact(s));
         }
         return result;
     }
     
-    MvnRepositoryConnector connector() {
+    RepositoryConnector connector() {
         return context.connector;
     }
 
