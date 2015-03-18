@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.TreeSet;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
@@ -31,6 +33,7 @@ import java.util.jar.Manifest;
  *
  * @author Phillip Webb
  * @author Andy Wilkinson
+ * @author Patrik Beno
  */
 public class Repackager {
 
@@ -40,7 +43,11 @@ public class Repackager {
 
 	private static final String BOOT_VERSION_ATTRIBUTE = "Spring-Boot-Version";
 
+	static final String BOOT_DEPENDENCIES_ATTRIBUTE = "Spring-Boot-Dependencies";
+
 	private static final byte[] ZIP_FILE_HEADER = new byte[] { 'P', 'K', 3, 4 };
+
+	private String launcherClass;
 
 	private String mainClass;
 
@@ -56,6 +63,10 @@ public class Repackager {
 		}
 		this.source = source.getAbsoluteFile();
 		this.layout = Layouts.forFile(source);
+	}
+
+	public void setLauncherClass(String launcherClass) {
+		this.launcherClass = launcherClass;
 	}
 
 	/**
@@ -87,7 +98,7 @@ public class Repackager {
 		this.layout = layout;
 	}
 
-	/**
+    /**
 	 * Repackage the source file so that it can be run using '{@literal java -jar}'
 	 * @param libraries the libraries required to run the archive
 	 * @throws IOException
@@ -157,7 +168,7 @@ public class Repackager {
 		final JarWriter writer = new JarWriter(destination);
 		try {
 			final Set<String> seen = new HashSet<String>();
-			writer.writeManifest(buildManifest(sourceJar));
+			writer.writeManifest(buildManifest(sourceJar, libraries));
 			libraries.doWithLibraries(new LibraryCallback() {
 				@Override
 				public void library(Library library) throws IOException {
@@ -215,7 +226,7 @@ public class Repackager {
 		return true;
 	}
 
-	private Manifest buildManifest(JarFile source) throws IOException {
+	private Manifest buildManifest(JarFile source, Libraries libraries) throws IOException {
 		Manifest manifest = source.getManifest();
 		if (manifest == null) {
 			manifest = new Manifest();
@@ -229,7 +240,9 @@ public class Repackager {
 		if (startClass == null) {
 			startClass = findMainMethod(source);
 		}
-		String launcherClassName = this.layout.getLauncherClassName();
+		String launcherClassName = (launcherClass != null)
+				? launcherClass
+				: layout.getLauncherClassName();
 		if (launcherClassName != null) {
 			manifest.getMainAttributes()
 					.putValue(MAIN_CLASS_ATTRIBUTE, launcherClassName);
@@ -238,12 +251,40 @@ public class Repackager {
 			}
 			manifest.getMainAttributes().putValue(START_CLASS_ATTRIBUTE, startClass);
 		}
+		else if (layout instanceof Layouts.Null && startClass != null) {
+			manifest.getMainAttributes().putValue(START_CLASS_ATTRIBUTE, startClass);
+		}
 		else if (startClass != null) {
 			manifest.getMainAttributes().putValue(MAIN_CLASS_ATTRIBUTE, startClass);
 		}
 		String bootVersion = getClass().getPackage().getImplementationVersion();
 		manifest.getMainAttributes().putValue(BOOT_VERSION_ATTRIBUTE, bootVersion);
+
+		populateDependencies(manifest, libraries);
+
 		return manifest;
+	}
+
+	void populateDependencies(Manifest manifest, final Libraries libraries)
+			throws IOException {
+		final StringBuilder deps = new StringBuilder();
+		final Set<String> sorted = new TreeSet<String>();
+		libraries.doWithLibraries(new LibraryCallback() {
+			@Override
+			public void library(Library library) throws IOException {
+				// unusual, but handling this gracefully
+				if (library.getArtifactURI() == null) { return; }
+				if (deps.length() > 0) { deps.append(","); }
+				deps.append(library.getArtifactURI().asString());
+				sorted.add(library.getArtifactURI().asString());
+			}
+		});
+		manifest.getMainAttributes().putValue(BOOT_DEPENDENCIES_ATTRIBUTE, deps.toString());
+
+		System.out.println("### Dependencies ###");
+		for (String s : sorted) {
+			System.out.println(s);
+		}
 	}
 
 	protected String findMainMethod(JarFile source) throws IOException {
