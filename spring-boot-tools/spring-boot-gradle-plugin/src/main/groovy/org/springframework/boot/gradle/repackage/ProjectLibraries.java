@@ -34,6 +34,7 @@ import org.springframework.boot.loader.tools.Libraries;
 import org.springframework.boot.loader.tools.Library;
 import org.springframework.boot.loader.tools.LibraryCallback;
 import org.springframework.boot.loader.tools.LibraryScope;
+import org.springframework.boot.loader.tools.MvnUri;
 
 /**
  * Expose Gradle {@link Configuration}s as {@link Libraries}.
@@ -75,6 +76,9 @@ class ProjectLibraries implements Libraries {
 
 	@Override
 	public void doWithLibraries(LibraryCallback callback) throws IOException {
+
+		System.out.println("customConfigurationName: "+customConfigurationName);
+
 		Set<GradleLibrary> custom = getLibraries(this.customConfigurationName,
 				LibraryScope.CUSTOM);
 		if (custom != null) {
@@ -97,15 +101,22 @@ class ProjectLibraries implements Libraries {
 	}
 
 	private Set<GradleLibrary> getLibraries(String configurationName, LibraryScope scope) {
-		Configuration configuration = (configurationName == null ? null : this.project
-				.getConfigurations().findByName(configurationName));
+		System.out.println("Configuration: "+configurationName);
+		Configuration configuration = (configurationName == null
+				? null
+				: this.project.getConfigurations().findByName(configurationName));
+		System.out.println("Configuration: "+configuration);
 		if (configuration == null) {
 			return null;
 		}
 		Set<GradleLibrary> libraries = new LinkedHashSet<GradleLibrary>();
 		for (ResolvedArtifact artifact : configuration.getResolvedConfiguration()
 				.getResolvedArtifacts()) {
-			libraries.add(new ResolvedArtifactLibrary(artifact, scope));
+			ModuleVersionIdentifier id = artifact.getModuleVersion().getId();
+			MvnUri mvnuri = new MvnUri(
+                    id.getGroup(), id.getName(), id.getVersion(),
+                    artifact.getType(), artifact.getClassifier());
+			libraries.add(new ResolvedArtifactLibrary(mvnuri, artifact, scope));
 		}
 		libraries.addAll(getLibrariesForFileDependencies(configuration, scope));
 		return libraries;
@@ -115,11 +126,13 @@ class ProjectLibraries implements Libraries {
 			Configuration configuration, LibraryScope scope) {
 		Set<GradleLibrary> libraries = new LinkedHashSet<GradleLibrary>();
 		for (Dependency dependency : configuration.getIncoming().getDependencies()) {
+			MvnUri mvnuri = new MvnUri(
+					dependency.getGroup(), dependency.getName(),
+					dependency.getVersion());
 			if (dependency instanceof FileCollectionDependency) {
 				FileCollectionDependency fileDependency = (FileCollectionDependency) dependency;
 				for (File file : fileDependency.resolve()) {
-					libraries.add(new GradleLibrary(fileDependency.getGroup(), file,
-							scope));
+					libraries.add(new GradleLibrary(mvnuri, file, scope));
 				}
 			}
 			else if (dependency instanceof ProjectDependency) {
@@ -173,29 +186,26 @@ class ProjectLibraries implements Libraries {
 
 	private class GradleLibrary extends Library {
 
-		private final String group;
-
 		private boolean includeGroupName;
 
-		public GradleLibrary(String group, File file, LibraryScope scope) {
-			super(file, scope);
-			this.group = group;
-		}
+        public GradleLibrary(MvnUri mvnuri, File file, LibraryScope scope) {
+            super(mvnuri, file.getName(), file, scope, false);
+        }
 
-		public void setIncludeGroupName(boolean includeGroupName) {
+        public void setIncludeGroupName(boolean includeGroupName) {
 			this.includeGroupName = includeGroupName;
 		}
 
 		@Override
 		public String getName() {
 			String name = super.getName();
-			if (this.includeGroupName && this.group != null) {
-				name = this.group + "-" + name;
+			if (this.includeGroupName && getArtifactURI() != null && getArtifactURI().getGroupId() != null) {
+				name = getArtifactURI().getGroupId() + "-" + name;
 			}
 			return name;
 		}
 
-		@Override
+        @Override
 		public int hashCode() {
 			return getFile().hashCode();
 		}
@@ -219,20 +229,15 @@ class ProjectLibraries implements Libraries {
 	 */
 	private class ResolvedArtifactLibrary extends GradleLibrary {
 
-		private final ResolvedArtifact artifact;
-
-		public ResolvedArtifactLibrary(ResolvedArtifact artifact, LibraryScope scope) {
-			super(artifact.getModuleVersion().getId().getGroup(), artifact.getFile(),
-					scope);
-			this.artifact = artifact;
+		public ResolvedArtifactLibrary(MvnUri mvnuri, ResolvedArtifact artifact, LibraryScope scope) {
+			super(mvnuri, artifact.getFile(), scope);
 		}
 
 		@Override
 		public boolean isUnpackRequired() {
 			if (ProjectLibraries.this.extension.getRequiresUnpack() != null) {
-				ModuleVersionIdentifier id = this.artifact.getModuleVersion().getId();
 				return ProjectLibraries.this.extension.getRequiresUnpack().contains(
-						id.getGroup() + ":" + id.getName());
+                        getArtifactURI().getGroupId() + ":" + getArtifactURI().getArtifactId());
 			}
 			return false;
 		}
