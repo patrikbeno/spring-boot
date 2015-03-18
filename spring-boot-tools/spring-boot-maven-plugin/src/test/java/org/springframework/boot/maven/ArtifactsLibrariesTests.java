@@ -107,10 +107,12 @@ public class ArtifactsLibrariesTests {
 		given(artifact1.getType()).willReturn("jar");
 		given(artifact1.getScope()).willReturn("compile");
 		given(artifact1.getGroupId()).willReturn("g1");
+		given(artifact1.getArtifactId()).willReturn("a");
 		given(artifact1.getFile()).willReturn(new File("a"));
 		given(artifact2.getType()).willReturn("jar");
 		given(artifact2.getScope()).willReturn("compile");
 		given(artifact2.getGroupId()).willReturn("g2");
+        given(artifact2.getArtifactId()).willReturn("a");
 		given(artifact2.getFile()).willReturn(new File("a"));
 		this.artifacts = new LinkedHashSet<Artifact>(Arrays.asList(artifact1, artifact2));
 		this.libs = new ArtifactsLibraries(this.artifacts, null, mock(Log.class));
