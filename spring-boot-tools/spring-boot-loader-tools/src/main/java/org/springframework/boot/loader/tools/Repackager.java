@@ -246,6 +246,9 @@ public class Repackager {
 			}
 			manifest.getMainAttributes().putValue(START_CLASS_ATTRIBUTE, startClass);
 		}
+		else if (layout instanceof Layouts.Null && startClass != null) {
+			manifest.getMainAttributes().putValue(START_CLASS_ATTRIBUTE, startClass);
+		}
 		else if (startClass != null) {
 			manifest.getMainAttributes().putValue(MAIN_CLASS_ATTRIBUTE, startClass);
 		}
