@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
@@ -31,6 +32,7 @@ import java.util.jar.Manifest;
  *
  * @author Phillip Webb
  * @author Andy Wilkinson
+ * @author Patrik Beno
  */
 public class Repackager {
 
@@ -39,6 +41,8 @@ public class Repackager {
 	private static final String START_CLASS_ATTRIBUTE = "Start-Class";
 
 	private static final String BOOT_VERSION_ATTRIBUTE = "Spring-Boot-Version";
+
+	static final String BOOT_DEPENDENCIES_ATTRIBUTE = "Spring-Boot-Dependencies";
 
 	private static final byte[] ZIP_FILE_HEADER = new byte[] { 'P', 'K', 3, 4 };
 
@@ -157,7 +161,7 @@ public class Repackager {
 		final JarWriter writer = new JarWriter(destination);
 		try {
 			final Set<String> seen = new HashSet<String>();
-			writer.writeManifest(buildManifest(sourceJar));
+			writer.writeManifest(buildManifest(sourceJar, libraries));
 			libraries.doWithLibraries(new LibraryCallback() {
 				@Override
 				public void library(Library library) throws IOException {
@@ -215,7 +219,7 @@ public class Repackager {
 		return true;
 	}
 
-	private Manifest buildManifest(JarFile source) throws IOException {
+	private Manifest buildManifest(JarFile source, Libraries libraries) throws IOException {
 		Manifest manifest = source.getManifest();
 		if (manifest == null) {
 			manifest = new Manifest();
@@ -243,7 +247,28 @@ public class Repackager {
 		}
 		String bootVersion = getClass().getPackage().getImplementationVersion();
 		manifest.getMainAttributes().putValue(BOOT_VERSION_ATTRIBUTE, bootVersion);
+
+		populateDependencies(manifest, libraries);
+
 		return manifest;
+	}
+
+	void populateDependencies(Manifest manifest, final Libraries libraries)
+			throws IOException {
+		final StringBuilder deps = new StringBuilder();
+		final Set<String> sorted = new TreeSet<String>();
+		libraries.doWithLibraries(new LibraryCallback() {
+			@Override
+			public void library(Library library) throws IOException {
+				// unusual, but handling this gracefully
+				if (library.getArtifactURI() == null) { return; }
+
+				if (deps.length() > 0) { deps.append(","); }
+				deps.append(library.getArtifactURI().asString());
+				sorted.add(library.getArtifactURI().asString());
+			}
+		});
+		manifest.getMainAttributes().putValue(BOOT_DEPENDENCIES_ATTRIBUTE, deps.toString());
 	}
 
 	protected String findMainMethod(JarFile source) throws IOException {
