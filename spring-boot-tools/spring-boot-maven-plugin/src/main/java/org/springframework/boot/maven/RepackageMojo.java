@@ -104,6 +104,12 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 	private String classifier;
 
 	/**
+	 * Name of the launcher class; overrides the one specified by layout.
+	 */
+	@Parameter
+	private String launcherClass;
+
+	/**
 	 * The name of the main class. If not specified the first compiled class found that
 	 * contains a 'main' method will be used.
 	 * @since 1.0
@@ -118,7 +124,7 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 	 * @since 1.0
 	 */
 	@Parameter
-	private LayoutType layout;
+	private String layout;
 
 	/**
 	 * A list of the libraries that must be unpacked from fat jars in order to run. Specify
@@ -184,10 +190,10 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 			}
 		};
 		repackager.setMainClass(this.mainClass);
-		if (this.layout != null) {
-			getLog().info("Layout: " + this.layout);
-			repackager.setLayout(this.layout.layout());
-		}
+		repackager.setLauncherClass(this.launcherClass);
+
+		getLog().info("Layout: " + this.layout);
+		repackager.setLayout(Layouts.resolve(this.layout));
 
 		Set<Artifact> artifacts = filterDependencies(this.project.getArtifacts(),
 				getFilters());
@@ -223,7 +229,7 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 			this.outputDirectory.mkdirs();
 		}
 		return new File(this.outputDirectory, this.finalName + classifier + "."
-				+ this.project.getArtifact().getArtifactHandler().getExtension());
+				+ this.project.getPackaging());
 	}
 
 	private LaunchScript getLaunchScript() throws IOException {
@@ -234,47 +240,5 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 		return null;
 	}
 
-	public enum LayoutType {
-
-		/**
-		 * Jar Layout
-		 */
-		JAR(new Layouts.Jar()),
-
-		/**
-		 * War Layout
-		 */
-		WAR(new Layouts.War()),
-
-		/**
-		 * Zip Layout
-		 */
-		ZIP(new Layouts.Expanded()),
-
-		/**
-		 * Dir Layout
-		 */
-		DIR(new Layouts.Expanded()),
-
-		/**
-		 * Module Layout
-		 */
-		MODULE(new Layouts.Module()),
-
-		/**
-		 * No Layout
-		 */
-		NONE(new Layouts.None());
-
-		private final Layout layout;
-
-		public Layout layout() {
-			return this.layout;
-		}
-
-		private LayoutType(Layout layout) {
-			this.layout = layout;
-		}
-	}
 
 }

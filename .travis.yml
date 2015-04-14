@@ -5,6 +5,9 @@ services:
   - mongodb
   - redis
 
+jdk:
+   - oraclejdk8
+
 install: true
 before_script:
 - mvn install -q -U -DskipTests=true -Dmaven.test.redirectTestOutputToFile=true || true
