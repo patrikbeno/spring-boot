@@ -248,6 +248,7 @@ public class Repackager {
 		}
 		else if (startClass != null) {
 			manifest.getMainAttributes().putValue(MAIN_CLASS_ATTRIBUTE, startClass);
+			manifest.getMainAttributes().putValue(START_CLASS_ATTRIBUTE, startClass);
 		}
 		String bootVersion = getClass().getPackage().getImplementationVersion();
 		manifest.getMainAttributes().putValue(BOOT_VERSION_ATTRIBUTE, bootVersion);
