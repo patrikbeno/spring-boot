@@ -203,6 +203,8 @@ public enum LauncherCfg {
 
     downloaders("3"),
 
+	retries("3"),
+
     ;
 
     static {

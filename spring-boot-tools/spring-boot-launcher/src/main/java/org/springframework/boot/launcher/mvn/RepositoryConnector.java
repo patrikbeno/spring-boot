@@ -46,6 +46,7 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
+import static org.springframework.boot.launcher.mvn.Artifact.Status.Downloaded;
 import static org.springframework.boot.launcher.util.IOHelper.close;
 
 /**
@@ -65,6 +66,8 @@ public class RepositoryConnector {
     ResolverContext context;
 
 	boolean connectionVerified = LauncherCfg.offline.asBoolean();
+
+    int retries = LauncherCfg.retries.asInt();
 
     public RepositoryConnector(Repository repository, ResolverContext context, RepositoryConnector parent) {
         this.repository = repository;
@@ -305,7 +308,7 @@ public class RepositoryConnector {
             commit(tmp, f, con.getLastModified());
 
             // done, report result
-            Artifact.Status status = (updated) ? Artifact.Status.Updated : Artifact.Status.Downloaded;
+            Artifact.Status status = (updated) ? Artifact.Status.Updated : Downloaded;
             return resource(artifact, status, url, f, null);
         } finally {
             close(con);
@@ -315,19 +318,26 @@ public class RepositoryConnector {
     void download(final Artifact artifact, final URLConnection con, final File file) throws IOException {
         artifact.setStatus(Artifact.Status.Downloading);
         file.getParentFile().mkdirs();
-        InputStream in = null;
-        try {
-            artifact.size = con.getContentLength();
-            artifact.setFile(file);
-            in = con.getInputStream();
-            Files.copy(in, file.toPath());
-            artifact.downloaded += file.length();
-            artifact.setStatus(Artifact.Status.Downloaded);
-        }
-        finally {
-            close(in);
-            close(con);
-            artifact.requests++;
+        for (int attempt = 1; attempt <= retries && !artifact.getStatus().equals(Downloaded); attempt++) {
+            InputStream in = null;
+            try {
+                artifact.size = con.getContentLength();
+                artifact.setFile(file);
+                in = con.getInputStream();
+                Files.copy(in, file.toPath());
+                artifact.downloaded += file.length();
+                artifact.setStatus(Downloaded);
+                break;
+            }
+            catch (IOException e) {
+                Log.debug("Error (attempt %d/%d): %s", attempt, retries, con.getURL());
+                if (attempt == retries) { throw e; }
+            }
+            finally {
+                close(in);
+                close(con);
+                artifact.requests++;
+            }
         }
     }
 

@@ -42,7 +42,7 @@ public class Main {
 	
 	/**
 	 * Application entry point. Delegates to {@code launch()}
-	 * @see #launch(String[])
+	 * @see #launch(Queue)
 	 */
 	public static void main(String[] args) {
         try {
