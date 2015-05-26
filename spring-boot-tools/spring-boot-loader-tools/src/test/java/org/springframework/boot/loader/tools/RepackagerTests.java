@@ -35,6 +35,7 @@ import org.springframework.util.FileCopyUtils;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.startsWith;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Matchers.anyString;
@@ -391,6 +392,28 @@ public class RepackagerTests {
 		finally {
 			jarFile.close();
 		}
+	}
+
+	@Test
+	public void dependencies() throws Exception {
+		testJarFile.addClass("a/b/C.class", ClassWithoutMainMethod.class);
+		File f = testJarFile.getFile();
+		Repackager repackager = new Repackager(f);
+		repackager.setLayout(new Layouts.None());
+		repackager.setMainClass("a.b.C");
+		repackager.repackage(f, new Libraries() {
+			@Override
+			public void doWithLibraries(LibraryCallback callback) throws IOException {
+				callback.library(new Library(new MvnUri("g", "a1", "v1"),
+						"a1", new File("a1.jar"), LibraryScope.COMPILE, false));
+				callback.library(new Library(new MvnUri("g", "a2", "v1-SNAPSHOT"),
+						"a2", new File("a2.jar"), LibraryScope.COMPILE, false));
+			}
+		});
+		JarFile jar = new JarFile(f);
+		String attribute = jar.getManifest().getMainAttributes()
+				.getValue(Repackager.BOOT_DEPENDENCIES_ATTRIBUTE);
+		assertEquals("g:a1:v1,g:a2:v1-SNAPSHOT", attribute);
 	}
 
 	private boolean hasLauncherClasses(File file) throws IOException {

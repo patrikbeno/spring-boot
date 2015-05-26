@@ -43,7 +43,8 @@ public abstract class Archive {
 
 	/**
 	 * Obtain the main class that should be used to launch the application. By default
-	 * this method uses a {@code Start-Class} manifest entry.
+	 * this method uses a {@code Start-Class} manifest entry and falls back
+	 * to {@code Main-Class} if the former is not found.
 	 * @return the main class
 	 * @throws Exception
 	 */
@@ -52,10 +53,13 @@ public abstract class Archive {
 		String mainClass = null;
 		if (manifest != null) {
 			mainClass = manifest.getMainAttributes().getValue("Start-Class");
+			if (mainClass == null) {
+				mainClass = manifest.getMainAttributes().getValue("Main-Class");
+			}
 		}
 		if (mainClass == null) {
 			throw new IllegalStateException(
-					"No 'Start-Class' manifest entry specified in " + this);
+					"No 'Start-Class' nor 'Main-Class' manifest entry specified in " + this);
 		}
 		return mainClass;
 	}

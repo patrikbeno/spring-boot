@@ -31,6 +31,7 @@ import org.springframework.boot.loader.tools.Libraries;
 import org.springframework.boot.loader.tools.Library;
 import org.springframework.boot.loader.tools.LibraryCallback;
 import org.springframework.boot.loader.tools.LibraryScope;
+import org.springframework.boot.loader.tools.MvnUri;
 
 /**
  * {@link Libraries} backed by Maven {@link Artifact}s
@@ -74,7 +75,11 @@ public class ArtifactsLibraries implements Libraries {
 					name = artifact.getGroupId() + "-" + name;
 					this.log.debug("Renamed to: " + name);
 				}
-				callback.library(new Library(name, artifact.getFile(), scope,
+                MvnUri mvnuri = new MvnUri(
+                        artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion(),
+                        artifact.getType(), artifact.getClassifier());
+				callback.library(new Library(
+						mvnuri, name, artifact.getFile(), scope,
 						isUnpackRequired(artifact)));
 			}
 		}
