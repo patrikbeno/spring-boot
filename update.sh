@@ -8,3 +8,4 @@ wget -q -N $url
 [ -L springboot.jar ] && rm springboot.jar
 ln -s $(ls -1 spring-boot-launcher-*.jar | tail -n1) springboot.jar
 ls -l springboot.jar
+chmod 640 *.jar
