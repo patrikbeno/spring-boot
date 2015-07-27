@@ -4,7 +4,7 @@ set -eu
 
 case $(whoami) in
 	root)	dst="/etc/springboot" ;;
-	*)		dst="$HOME/.springboot" ;;
+	*)	dst="$HOME/.springboot" ;;
 esac
 
 echo "Creating $dst directory..."
