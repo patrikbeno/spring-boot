@@ -28,13 +28,3 @@ if [ -d ~/bin ]; then
 	[ -L ~/bin/springboot ] || ln -s ~/.springboot/springboot.sh ~/bin/springboot
 	ls -l ~/bin/springboot
 fi
-
-if [[ "$(whoami)" = "root" ]]; then
-	echo "Installing /usr/local/bin/springboot"
-	[ -L /etc/springboot/springboot.sh ] && rm /etc/springboot/springboot.sh
-	ln -s /etc/springboot/springboot.sh /usr/local/bin/springboot
-else
-	echo "Skipping installation in /usr/local/bin. Must be root, not $(whoami)"
-fi
-
-
