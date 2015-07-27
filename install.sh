@@ -24,6 +24,11 @@ echo "Downloading launcher script..."
 wget -q -O $dst/springboot.sh $repo/$branch/springboot.sh
 chmod a+x $dst/springboot.sh
 
+if [ -d ~/bin ]; then
+	[ -L ~/bin/springboot ] || ln -s ~/.springboot/springboot.sh ~/bin/springboot
+	ls -l ~/bin/springboot
+fi
+
 if [[ "$(whoami)" = "root" ]]; then
 	echo "Installing /usr/local/bin/springboot"
 	[ -L /etc/springboot/springboot.sh ] && rm /etc/springboot/springboot.sh
