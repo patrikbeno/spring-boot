@@ -104,6 +104,10 @@ public class Resolver {
         resolveMainClassAndDependencies();
         all.add(this);
         all.addAll(dependencies());
+
+        // and fire the resolver tasks
+        for (Resolver r : all) { r.download(); }
+
         return all;
     }
 
