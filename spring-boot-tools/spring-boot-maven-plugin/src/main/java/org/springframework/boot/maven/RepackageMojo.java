@@ -191,9 +191,10 @@ public class RepackageMojo extends AbstractDependencyFilterMojo {
 		};
 		repackager.setMainClass(this.mainClass);
 		repackager.setLauncherClass(this.launcherClass);
-
-		getLog().info("Layout: " + this.layout);
-		repackager.setLayout(Layouts.resolve(this.layout));
+		if (layout != null) {
+			getLog().info("Layout: " + layout);
+			repackager.setLayout(Layouts.resolve(layout));
+		}
 
 		Set<Artifact> artifacts = filterDependencies(this.project.getArtifacts(),
 				getFilters());
