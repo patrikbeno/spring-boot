@@ -28,7 +28,7 @@ public class VaultConfiguration {
 	static public final String PROPERTY_SOURCE_NAME = "$vault";
 
 	@Bean
-	BeanFactoryPostProcessor beanFactoryPostProcessor(ConfigurableApplicationContext ctx) {
+	static BeanFactoryPostProcessor beanFactoryPostProcessor(ConfigurableApplicationContext ctx) {
 		return new VaultReorderer(ctx);
 	}
 
