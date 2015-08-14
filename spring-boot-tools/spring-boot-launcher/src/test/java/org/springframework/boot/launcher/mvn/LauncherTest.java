@@ -12,7 +12,7 @@ public class LauncherTest extends AbstractTest {
 
 	@Test
 	public void test() {
-		Artifact artifact = new Artifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
+		Artifact artifact = Artifact.parse("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
 		Launcher launcher = new Launcher(artifact);
 		ClassLoader cl = launcher.resolve(artifact, Thread.currentThread().getContextClassLoader());
 		Assert.assertNotNull(cl);

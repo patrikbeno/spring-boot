@@ -20,10 +20,7 @@ import org.springframework.boot.launcher.url.UrlSupport;
 import org.springframework.boot.launcher.util.CommandLine;
 import org.springframework.boot.launcher.util.Log;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -46,6 +43,7 @@ public class Main {
 	 */
 	public static void main(String[] args) {
         try {
+            Thread.currentThread().setName("SpringBoot:Launcher");
             new Main().launch(new LinkedList<String>(asList(args)));
         } catch (LauncherException e) {
             Log.error(e, "Could not launch application!");
@@ -61,31 +59,25 @@ public class Main {
 	protected void launch(Queue<String> args) throws LauncherException {
 
         CommandLine cmdline = CommandLine.parse(args);
-        exportOptions(cmdline.properties());
-
         Tools tools = new Tools();
-        Map<String, Method> commands = tools.getCommands();
 
-        String cmd = cmdline.remainder().poll();
+        String cmd = cmdline.remainder().peek();
 
-        if (cmdline.properties().containsKey("help")) {
+        // undefined command or --help required
+        if (cmd == null || cmdline.properties().contains("help")) {
             cmd = "help";
-        }
-        if (!commands.containsKey(cmd)) {
-            cmdline.remainder().add("--artifact=" + cmd);
+
+        } else if (tools.supports(cmd)) { // standard supported command
+            cmdline.remainder().remove();
+
+        } else { // unsupported command or an artifactId (assume `launch` command)
             cmd = "launch";
         }
 
-        try {
-            cmdline = CommandLine.parse(cmdline.remainder());
-            commands.get(cmd).invoke(tools, cmdline);
-        } catch (InvocationTargetException e) {
-            throw e.getTargetException() instanceof LauncherException
-                    ? (LauncherException) e.getTargetException()
-                    : new LauncherException(e.getTargetException());
-        } catch (IllegalAccessException e) {
-            throw new LauncherException(e);
-        }
+        exportOptions(cmdline.properties());
+        cmdline = CommandLine.parse(cmdline.remainder());
+        tools.invoke(cmd, cmdline);
+
     }
 
     void exportOptions(Properties properties) {

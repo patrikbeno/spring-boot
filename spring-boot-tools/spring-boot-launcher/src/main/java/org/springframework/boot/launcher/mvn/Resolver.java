@@ -178,7 +178,7 @@ public class Resolver {
             if (s == null || s.trim().isEmpty()) {
                 continue;
             }
-            result.add(new Artifact(s));
+            result.add(Artifact.parse(s));
         }
         return result;
     }

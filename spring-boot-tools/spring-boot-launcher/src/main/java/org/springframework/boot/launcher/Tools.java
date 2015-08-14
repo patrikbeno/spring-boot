@@ -15,6 +15,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Formatter;
@@ -40,17 +41,39 @@ public class Tools {
 		return commands;
 	}
 
+	boolean supports(String command) {
+		return getCommands().containsKey(command);
+	}
+
+	void invoke(String command, CommandLine cmdline) {
+		try {
+			getCommands().get(command).invoke(this, cmdline);
+		} catch (IllegalAccessException e) {
+			throw new LauncherException(e);
+		} catch (IllegalArgumentException e) {
+			throw new LauncherException(e);
+		} catch (InvocationTargetException e) {
+			if (e.getTargetException() instanceof LauncherException) {
+				throw (LauncherException) e.getTargetException();
+			} else {
+				throw new LauncherException(e);
+			}
+		}
+	}
+
+	// launch <GAV> <application command line>
 	@Command
 	void launch(CommandLine cmdline) throws Exception {
-		String artifact = option(cmdline, "artifact", true, "--artifact=<GAV>");
+		String artifact = cmdline.remainder().poll();
+		if (artifact == null) {
+			throw new LauncherException("Expected artifactId");
+		}
 		LauncherCfg.configure();
-		new Launcher(new Artifact(artifact)).launch(cmdline.remainder());
+		new Launcher(Artifact.parse(artifact)).launch(cmdline.remainder());
 	}
 
 	@Command
 	void decrypt(CommandLine cmdline) throws Exception {
-		cmdline.remainder().poll();
-		cmdline = CommandLine.parse(cmdline.remainder());
 		String key = option(cmdline, "key", true, "Key");
 		String value = Vault.instance().getProperty(key);
 		System.out.println(value);
@@ -58,8 +81,6 @@ public class Tools {
 
 	@Command
 	void encrypt(CommandLine cmdline) throws IOException {
-		cmdline.remainder().poll();
-		cmdline = CommandLine.parse(cmdline.remainder());
 		String key = option(cmdline, "key", true, "Key");
 		String value = option(cmdline, "value", false, "Value");
 
@@ -99,9 +120,6 @@ public class Tools {
 
 	@Command
 	void repository(CommandLine cmdline) {
-		cmdline.remainder().poll();
-		cmdline = CommandLine.parse(cmdline.remainder());
-
 		if (cmdline.properties().isEmpty()) {
 			System.out.println("repository --id=<alias> --url=<URL> --username=<username>");
 			return;
@@ -132,9 +150,11 @@ public class Tools {
 		password = Vault.instance().encrypt(password);
 
 		Formatter f = new Formatter(System.out);
+		f.format("# springboot.properties%n");
 		f.format(Repository.P_URL, id).format("=%s%n", url);
 		if (username != null) { f.format(Repository.P_USERNAME, id).format("=%s%n", username); }
 		if (password != null) { f.format(Repository.P_PASSWORD, id).format("=%s%n", password); }
+		f.format("# EOF%n");
 	}
 
 	@Command

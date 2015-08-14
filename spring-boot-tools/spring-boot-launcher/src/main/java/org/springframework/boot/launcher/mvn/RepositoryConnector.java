@@ -57,7 +57,7 @@ public class RepositoryConnector {
     static private enum UrlConMethod { HEAD, GET }
 
     static private final String USER_AGENT = String.format(
-            "SpringBoot-MvnLauncher/%s", Launcher.class.getPackage().getImplementationVersion());
+            "SpringBoot-Launcher/%s", Launcher.class.getPackage().getImplementationVersion());
 
     Repository repository;
 

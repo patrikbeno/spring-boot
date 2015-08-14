@@ -308,10 +308,6 @@ public enum LauncherCfg {
 		return new File(asString());
 	}
 
-	public Artifact asMvnArtifact() {
-		return new Artifact(asString());
-	}
-
 	// /
 
     static {
@@ -321,8 +317,8 @@ public enum LauncherCfg {
     static public void init() {}
 
     static private void validate() {
-        fix(resolvers, 1, 30);
-        fix(downloaders, 1, 10);
+        fix(resolvers, 1, 10);
+        fix(downloaders, 1, 3);
         fix(updateInterval, 0, Integer.MAX_VALUE);
     }
 

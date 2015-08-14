@@ -28,6 +28,7 @@ import org.springframework.boot.loader.archive.JarFileArchive;
 import org.springframework.boot.loader.jar.JarFile;
 
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -38,7 +39,6 @@ import java.util.SortedSet;
  * Specialized implementation of the {@code Launcher} that intelligently downloads
  * dependencies from configured Maven repository.
  *
- * @see MvnLauncherBase
  * @see org.springframework.boot.loader.ExecutableArchiveLauncher
  *
  * @author Patrik Beno
@@ -75,7 +75,12 @@ public class Launcher extends ExecutableArchiveLauncher {
 		return false; // unsupported / irrelevant
 	}
 
-	@Override
+    @Override
+    protected ClassLoader createClassLoader(URL[] urls) throws Exception {
+        return new URLClassLoader(urls, null);
+    }
+
+    @Override
 	protected void launch(String[] args) {
 		try {
 			JarFile.registerUrlProtocolHandler();
@@ -223,8 +228,14 @@ public class Launcher extends ExecutableArchiveLauncher {
 			Log.debug("##");
 		}
         LauncherCfg.export();
-		super.launch(args, mainClass, classLoader);
+
+        Runnable runner = createMainMethodRunner(mainClass, args, classLoader);
+        Thread runnerThread = new Thread(runner);
+        runnerThread.setContextClassLoader(classLoader);
+        runnerThread.setName("main");
+        runnerThread.start();
 	}
+
 
     ///
 

@@ -14,7 +14,7 @@ import java.util.concurrent.ExecutionException;
 public class RepositorySupport {
 
     static public Artifact resolve(String mvnuri) {
-        Artifact ma = new Artifact(mvnuri);
+        Artifact ma = Artifact.parse(mvnuri);
         ResolverContext ctx = null;
         try {
             ctx = new ResolverContext(ma);

@@ -132,7 +132,7 @@ public class VaultTest {
     public void decrypt() {
         Vault vault = Vault.instance();
         String s = vault.resolve(
-                "Encrypted value: ${encrypted:CfTPBtxs4vZnYF2pW3ouwvB4CzZJ3Av2Lc2a6wp1+sPmSJxcK/HXsjx3ntNXn72VFpsM+f86iwYj+SxJKY/FBK9MZETAioPW4F8CDGoHGzFXtk/JCaCdtvjWJTfYjJRjTiTnM83r7tliCBfKxlgEKjZkPq/hOT135dt6ZKK5avGLQ0iNkb5hF25AlyANr4HvSUPFDEu5QfZeNO206jowg4mALde5s9W0kRZiZKAvptvQtF/H2HuNM3S2E6TS0N3T4NR7zRwlzOxw6CGu0OI5qvQYcqHKjY6tKp0VQjyCHyioy+gyt/HHm1GceLlQgkqq6zIKk5dp+TfohcMxLQ1eJA==}.");
+                "Encrypted value: ${encrypted:6a3898c12e43128a3a4c10e13fdfa746aba9c8309f8e008b8835f766156cd5949397c48bdcf010727847073d331ef39e86c9ceab39c87cfe133f10b0733c4997b3ba5d3c0d1a848d1f284e3cf4ff04d02b1b05ada97b0d0914bb1ecd96f078d3a771ac6db800d9a606ccd35da71b60aff99ad7eff8cb9fb94aab3d68339bcd03af474c159a4ece88f446fed06924672201f78430e56d0b0dbc273e4bdadfddae30291da71d0ede508ec50ddf42657923888104db39976f68c9985077f45ad81dec3b3c971ccf1d9f636d83b011e5bc63136fe4b2bce51bf8a96f864238da1fb0c37d7fd5e21192c7f8d94c7620695c06a737056c3a734c6a1a11f4692c213519}.");
         System.out.println(s);
         Assert.assertTrue(s.matches("Encrypted value: value."));
     }

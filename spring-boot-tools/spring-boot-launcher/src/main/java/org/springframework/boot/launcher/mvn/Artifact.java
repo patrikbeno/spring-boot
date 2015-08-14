@@ -15,6 +15,7 @@
  */
 package org.springframework.boot.launcher.mvn;
 
+import org.springframework.boot.launcher.LauncherException;
 import org.springframework.boot.loader.archive.Archive;
 import org.springframework.boot.loader.archive.JarFileArchive;
 
@@ -49,6 +50,33 @@ public class Artifact {
 		Resolving, Resolved, NotModified, Downloadable, Downloading, Downloaded, Updated, Cached, Offline, NotFound, Invalid
 	}
 
+	static public Artifact parse(String mvnuri) {
+		Artifact a = tryparse(mvnuri);
+		if (a == null) {
+			throw new LauncherException(String.format(
+					"Invalid Maven artifact URI: \"%s\". " +
+					"Expected groupId:artifactId:version[:packaging[:classifier]]",
+					mvnuri
+			));
+		}
+		return a;
+	}
+	
+	static public Artifact tryparse(String mvnuri) {
+		StringTokenizer st = new StringTokenizer(mvnuri, ":");
+		String g = st.hasMoreTokens() ? st.nextToken() : null;
+		String a = st.hasMoreTokens() ? st.nextToken() : null;
+		String v = st.hasMoreTokens() ? st.nextToken() : null;
+		String packaging = st.hasMoreTokens() ? st.nextToken() : "jar";
+		String classifier = st.hasMoreTokens() ? st.nextToken() : null;
+
+		if (g == null || a == null || v == null) {
+			return null;
+		}
+
+		return new Artifact(g, a, v, packaging, classifier);
+	}
+
 	private String groupId;
 	private String artifactId;
 	private String version;
@@ -77,19 +105,10 @@ public class Artifact {
 	protected Artifact(String groupId, String artifactId, String version, String packaging, String classifier) {
 		this.groupId = groupId;
 		this.artifactId = artifactId;
-		this.version = groupId;
+		this.version = version;
 		this.packaging = packaging;
 		this.classifier = classifier;
 		fixupExplicitSnapshotVersion();
-	}
-
-	public Artifact(String mvnuri) {
-		StringTokenizer st = new StringTokenizer(mvnuri, ":");
-		this.groupId = st.nextToken();
-		this.artifactId = st.nextToken();
-		this.version = st.nextToken();
-		this.packaging = st.hasMoreTokens() ? st.nextToken() : "jar";
-		this.classifier = st.hasMoreTokens() ? st.nextToken() : null;
 	}
 
 	public String getGroupId() {

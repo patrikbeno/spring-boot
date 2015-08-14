@@ -13,7 +13,7 @@ public class RepositoryConnectorTest extends AbstractTest {
 
 	@Test
 	public void test() {
-		Artifact a = new Artifact("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
+		Artifact a = Artifact.parse("org.springframework.boot:spring-boot-loader:1.2.0.BUILD-SNAPSHOT");
         ResolverContext context = new ResolverContext(a);
         try {
             RepositoryConnector c = new RepositoryConnector(Repository.forRepositoryId("default"), context, null);

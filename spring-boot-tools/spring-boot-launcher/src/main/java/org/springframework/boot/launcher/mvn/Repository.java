@@ -38,9 +38,9 @@ import java.net.URL;
  */
 public class Repository {
 
-    static public final String P_URL           = "springboot.mvnlauncher.repository.%s.url";
-    static public final String P_USERNAME      = "springboot.mvnlauncher.repository.%s.username";
-    static public final String P_PASSWORD      = "springboot.mvnlauncher.repository.%s.password";
+    static public final String P_URL           = "springboot.launcher.repository.%s.url";
+    static public final String P_USERNAME      = "springboot.launcher.repository.%s.username";
+    static public final String P_PASSWORD      = "springboot.launcher.repository.%s.password";
 
     static public Repository forRepositoryId(String repositoryId) {
 

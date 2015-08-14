@@ -1,6 +1,7 @@
 package org.springframework.boot.launcher.mvn;
 
 import org.springframework.boot.launcher.LauncherCfg;
+import org.springframework.boot.launcher.LauncherException;
 import org.springframework.boot.launcher.util.Log;
 import org.springframework.boot.launcher.util.StatusLine;
 
@@ -37,21 +38,21 @@ public class ResolverContext implements AutoCloseable {
         int counter;
         @Override
         public Thread newThread(Runnable r) {
-            return new Thread(group, r, "MvnLauncher:Resolver#" + (++counter));
+            return new Thread(group, r, "SpringBoot:Launcher:Resolver#" + (++counter));
         }
     });
     ExecutorService downloaders = Executors.newFixedThreadPool(LauncherCfg.downloaders.asInt(), new ThreadFactory() {
         int counter;
         @Override
         public Thread newThread(Runnable r) {
-            return new Thread(group, r, "MvnLauncher:Downloader#" + (++counter));
+            return new Thread(group, r, "SpringBoot:Launcher:Downloader#" + (++counter));
         }
     });
 
     ScheduledExecutorService progress = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
-            return new Thread(group, r, "MvnLauncher:ProgressMonitor");
+            return new Thread(group, r, "SpringBoot:Launcher:ProgressMonitor");
         }
     });
 
@@ -80,7 +81,14 @@ public class ResolverContext implements AutoCloseable {
         RepositoryConnector connector = null;
         for (String id : ids) {
             Repository repo = Repository.forRepositoryId(id);
+            if (repo == null) {
+                Log.error(null, "Cannot resolve repository: `%s`. Ignoring.", id);
+                continue;
+            }
             connector = new RepositoryConnector(repo, this, connector);
+        }
+        if (connector == null) {
+            throw new LauncherException("No valid repositories configured");
         }
         Log.debug("Using repositories:");
         for (RepositoryConnector c = connector; c != null; c = c.parent) {
