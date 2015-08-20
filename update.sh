@@ -2,7 +2,7 @@
 set -eu
 
 repo="${1:-http://repo.greenhorn.sk}"
-version="${2-:1.3.0.BUILD-SNAPSHOT}"
+version="${2:-1.3.0.BUILD-SNAPSHOT}"
 
 echo "Updating SpringBoot Launcher..."
 cd $(dirname $0)
