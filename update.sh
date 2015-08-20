@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eu
 
-repo="${1:-http://repo.greenhorn.sk}"
+repo="${1:-http://repo.jrevolt.io}"
 version="${2:-1.3.0.BUILD-SNAPSHOT}"
 
 echo "Updating SpringBoot Launcher..."
